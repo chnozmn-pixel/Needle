@@ -51,8 +51,7 @@ Scope notes below.
 
 ## Install from GitHub
 
-Replace `chnozmn-pixel` with the GitHub account/organization that hosts this repository
-before publishing the release assets.
+The project repository is https://github.com/chnozmn-pixel/Needle .
 
 ### 1. Release ZIP — recommended for end users
 
@@ -84,10 +83,9 @@ bundle, copies the icon and `Info.plist`, and ad-hoc signs it. The output is
 
 ### 3. Homebrew Cask from this repository
 
-A Cask definition is included at `Casks/needle.rb`. A maintainer replaces the
-`chnozmn-pixel` placeholders; the SHA-256 is refreshed from
-`scripts/package-release.sh` for every release. After the Cask is published in
-a tap:
+A Cask definition is included at `Casks/needle.rb`. The SHA-256 is refreshed
+from `scripts/package-release.sh` for every release. After the Cask is
+published in a tap:
 
 ```bash
 brew tap chnozmn-pixel/needle
