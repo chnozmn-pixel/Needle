@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/needle-icon.png" alt="Needle" width="128" height="128">
+</p>
+
 # Needle
 
 **Language / Dil:** [English](#needle) · [Türkçe](#türkçe)
