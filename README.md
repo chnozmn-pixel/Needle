@@ -1,14 +1,16 @@
 # Needle
 
+**Language / Dil:** [English](#needle) · [Türkçe](#turkce)
+
 Fast, private, local file search for macOS — inspired by voidtools Everything.
 
 Needle builds **its own index**. It does not require an Everything installation,
 a Windows machine, or a cloud service. Search results update while you type.
 
-> Türkçe kısa özet: Needle, macOS için Everything benzeri yerel bir dosya arama
+> Kısa özet: Needle, macOS için Everything benzeri yerel bir dosya arama
 > uygulamasıdır. Kendi SQLite indeksini oluşturur, FSEvents ile yerel değişiklikleri
 > anında yakalar, ağ birimlerini ayarlanabilir bir zamanlamada tarar ve varsayılan
-> olarak İngilizce arayüzle gelir.
+> olarak İngilizce arayüzle gelir. Aşağıda [tam Türkçe anlatım](#turkce) bulunur.
 
 ## What it actually does
 
@@ -213,3 +215,199 @@ References and thanks are listed separately in
 documenting the search language that inspired this project, to Apple and the
 SQLite project for the platform foundations, and to everyone who tested and
 reported issues.
+
+---
+
+<a id="turkce"></a>
+
+# Needle — Türkçe
+
+macOS için voidtools Everything’den esinlenen, **yerel ve hızlı** bir dosya arama
+uygulaması. [İngilizce bölüme dön](#needle).
+
+Needle kendi indeksini oluşturur; Everything kurulumuna, Windows makinesine veya
+bulut servisine ihtiyacı yoktur. Yazarken sonuçlar anında güncellenir.
+
+## Ne işe yarar?
+
+- **Kendi kalıcı indeksi** — dosya/klasör adları, tam yollar, boyut, oluşturma ve
+  değiştirme tarihleri SQLite’a yazılır:
+  `~/Library/Application Support/Needle/index.sqlite`.
+  Yeniden başlatmak tam taramaya yol açmaz.
+- **Canlı arama —** adlar ve yollar üzerinde bellek içi n-gram indeksi sayesinde
+  ilk tarama sürerken bile yazmak akıcıdır. Enter’a basman gerekmez; yazdıkça
+  sonuçlar daralır.
+- **Anlık yerel güncelleme —** `FSEvents` yerel disklerdeki değişiklikleri izler;
+  diski baştan taramak yerine sadece ilgili kayıt güncellenir/silinir.
+- **Ağ klasörleri —** SMB/AFP paylaşımları kök olarak eklenebilir. FSEvents ağ
+  paylaşımlarında güvenilmez olduğu için ağ kökleri zamanlamayla taranır:
+  **varsayılan olarak her gün 02:00**; ayrıca boşta iken, saatlik veya 5 dakikada
+  bir seçenekleri vardır. Yerel diskler canlı FSEvents izlemeye devam eder.
+- **Spotlight ile zenginleştirme (isteğe bağlı)** — kendi indeksinde olmayan veya
+  ağ birimindeki dosyalar `mdfind` ile tamamlanabilir.
+- **Everything tarzı sorgu dili —** `|`, `!`, gruplar, tırnaklı ifadeler,
+  joker karakterler, `ext:`, `path:`, `parent:`, `root:`, `file`, `folder`,
+  `size:`, tarih filtreleri, `content:`, `child:`, `empty:`, `dupe:`,
+  `distinct:`, `count:`, `sort:`, makrolar (`audio:`, `image:`, `video:`, `zip:`)
+  ve karakter varlıkları.
+- **İş akışı özellikleri —** kayıtlı aramalar, arama/geçmiş, gelişmiş arama,
+  özellikler, CSV/metin dışa aktarma, ayarlanabilir sütunlar, temalar, Quick Look,
+  Finder işlemleri, global kısayol ve varsayılan olarak kapalı, yalnızca
+  `127.0.0.1`’e bağlanan HTTP/JSON arama sunucusu.
+- **Gizlilik —** indeksleme ve arama tamamen yereldir. HTTP sunucusu sadece
+  localhost’a bağlanır ve açıkça etkinleştirilmelidir.
+
+Needle **Everything’den esinlenmiştir, ikili uyumlu değildir**. ETP ağ protokolü
+ve bazı gelişmiş Everything özellikleri henüz yoktur; aşağıdaki kapsam notlarına
+bakın.
+
+## Gereksinimler
+
+- macOS 13 veya üzeri
+- Apple Silicon ya da Intel
+- Kaynaktan derleme için Xcode Command Line Tools (`xcode-select --install`)
+
+## GitHub’dan kurulum
+
+Proje adresi: https://github.com/chnozmn-pixel/Needle
+
+### 1. Release ZIP — son kullanıcı için önerilen
+
+1. Repo’nun **Releases** sayfasını açın.
+2. `Needle-0.1.0.zip` dosyasını indirin.
+3. ZIP’i açın ve `Needle.app` uygulamasını `/Applications` içine taşıyın.
+4. Uygulamayı açın. İlk açılışta ev klasörünüz indekslenir.
+
+Uygulama **ad-hoc imzalıdır**. macOS engellerse uygulamaya sağ tıkla **Aç**’ı
+seçin ya da **Sistem Ayarları → Gizlilik ve Güvenlik** bölümünden bir kez onaylayın.
+Kurulum sihirbazı veya arka plan servisi yoktur.
+
+### 2. SwiftPM ile kaynaktan derleme
+
+Denetlenebilir en doğrudan yöntem: repodaki kodu olduğu gibi derlersiniz.
+
+```bash
+git clone https://github.com/chnozmn-pixel/Needle.git
+cd Needle
+chmod +x scripts/*.sh
+./scripts/build-app.sh
+open dist/Needle.app
+```
+
+`scripts/build-app.sh` release derlemesi yapar, `.app` paketini oluşturur, simge
+ve `Info.plist` dosyalarını kopyalar ve ad-hoc imzalar. Çıktı: `dist/Needle.app`.
+
+### 3. Bu repodan Homebrew Cask
+
+`Casks/needle.rb` dosyası bir Cask tanımı içerir. SHA-256 değeri her sürümde
+`scripts/package-release.sh` çıktısından yenilenir. Cask bir tap’e yayınlandıktan
+sonra:
+
+```bash
+brew tap chnozmn-pixel/needle
+brew install --cask needle
+```
+
+Cask release ZIP’ini indirir, SHA-256 doğrulaması yapar, `Needle.app` uygulamasını
+`/Applications` içine kurar ve kaldırma sırasında Needle’ın destek dosyalarını
+temizleyen bir `zap` tanımı sağlar.
+
+Yayınlamadan önce yerel deneme için:
+
+```bash
+brew install --cask ./Casks/needle.rb
+```
+
+### 4. Doğrudan çalıştırma — geliştirme
+
+```bash
+swift run Needle
+```
+
+Debug derlemesi oluşturur ve aynı indeks veritabanını kullanır. Normal kurulum
+yolu değil, geliştirme içindir.
+
+### Bakım: release ZIP oluşturma
+
+```bash
+./scripts/package-release.sh
+# dist/Needle-0.1.0.zip ve SHA-256 değerini yazdırır
+```
+
+ZIP’i GitHub Release olarak yükleyin ve SHA-256 değerini Cask dosyasına kopyalayın.
+
+## İlk açılış
+
+- Needle ev klasörünüzü otomatik indeksler. Kökleri **Ayarlar → Kökler** bölümünden
+  ekleyebilir/silebilirsiniz.
+- Alt çubuk canlı tarama ilerlemesini ve kayıt sayısını gösterir.
+- `⌘⇧Space` pencereyi öne getirir. `⏎` açar, `⌘⏎` Finder’da gösterir,
+  `Space` Quick Look açar, `⌘⇧C` yolları kopyalar.
+- Arayüz dili varsayılan olarak **İngilizce**’dir. Ayarlar’da sistem dili,
+  Türkçe, Almanca, İspanyolca, Fransızca, İtalyanca, Portekizce, Japonca,
+  Basitleştirilmiş Çince, Korece, Rusça, Arapça ve Hintçe bulunur. Dil değişimi
+  anında uygulanır; çevrilmemiş metinler İngilizce’ye düşer.
+
+## Arama sözdizimi
+
+| Örnek | Anlamı |
+| --- | --- |
+| `report` | Adında “report” geçenler |
+| `"annual report"` | Tam ifade |
+| `apple \| pear` | VEYA |
+| `<apple pear> \| banana` | Grup + VEYA |
+| `!tmp` | “tmp” içerenleri hariç tut |
+| `ext:pdf;docx` | PDF veya DOCX |
+| `path:projects` | Tam yolda geçen |
+| `file  size:>10mb` | 10 MB’dan büyük dosyalar |
+| `dm:today` | Bugün değiştirilenler |
+| `content:needle` | Dosya içeriğinde ara |
+| `dupe:size;content` | Yinelenen dosyalar |
+| `distinct:name` | Tekil sonuçlar |
+
+Boşluk VE, `|` VEYA, `!` DEĞİL anlamına gelir. Tam liste uygulamada
+**Ayarlar → Sözdizimi** sekmesindedir.
+
+## Mimari
+
+| Katman | Görev |
+| --- | --- |
+| `FileSystem.scan` | Seçilen kökleri POSIX `opendir`/`readdir`/`lstat` ile dolaşır, metadata alır ve SQLite’a yazar. |
+| `IndexDatabase` | Kalıcı WAL modlu SQLite veritabanı; artımlı ekleme/güncelleme/silme. |
+| `SearchEngine` | Bellek içi 1/2/3 bayt ters n-gram posting listeleri; aday kesişiminden sonra gerçek substring doğrulaması. |
+| `FSEventsWatcher` | Yerel birimlerdeki canlı değişiklik akışı; sadece etkilenen kayıtlar güncellenir. |
+| `SpotlightSearch` | Boşluklar ve ağ birimleri için isteğe bağlı `mdfind` tamamlaması. |
+| `IndexStore` / `IndexCoordinator` | Tarama yaşam döngüsü, ağ zamanlaması ve SwiftUI için durum yayınlama. |
+| `NeedleApp` | SwiftUI arayüzü, kısayollar, Quick Look, dışa aktarma ve ayarlar. |
+| `LocalizationManager` | İngilizce’ye düşen çalışma zamanı dil değişimi. |
+
+Kimlikler inode değil, normalize edilmiş tam yolun 64-bit FNV-1a özetidir; böylece
+ağ paylaşımlarında da kararlı kalır.
+
+## Kapsam
+
+Var: kalıcı indeks, canlı arama, FSEvents, zamanlamalı ağ kökleri, Spotlight
+zenginleştirme, Everything tarzı sorgu ayrıştırma, içerik ve yinelenen dosya
+araması, sıralama, dışa aktarma, HTTP/JSON uç noktası, lokalizasyon ve yukarıdaki
+arayüz özellikleri.
+
+Henüz yok: ETP ikili protokolü, tam dosya listesi içe/dışa aktarma uyumu, indeks
+günlüğü/özellik uyumu, gelişmiş indeks konumu ayarları ve özel sıralamanın son
+ayrıntıları. Katkılar memnuniyetle karşılanır.
+
+## Testler
+
+```bash
+swift test
+```
+
+Testler sorgu ayrıştırma, n-gram arama, artımlı indeks güncellemeleri, gelişmiş
+sorgular, ağ zamanlaması, HTTP uç noktaları ve lokalizasyon denetimini kapsar.
+
+## Lisans ve teşekkürler
+
+Needle [MIT Lisansı](LICENSE) ile yayınlanır.
+
+Kaynaklar ve teşekkürler ayrıca [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md)
+dosyasındadır. Kısaca: arama dilini belgeleyen voidtools’a, platform altyapısı
+için Apple ve SQLite projelerine ve test edip hata bildiren herkese teşekkürler.
