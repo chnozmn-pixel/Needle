@@ -8,7 +8,7 @@ a Windows machine, or a cloud service. Search results update while you type.
 > Türkçe kısa özet: Needle, macOS için Everything benzeri yerel bir dosya arama
 > uygulamasıdır. Kendi SQLite indeksini oluşturur, FSEvents ile yerel değişiklikleri
 > anında yakalar, ağ birimlerini ayarlanabilir bir zamanlamada tarar ve varsayılan
-> olarak İngilizce'arayüzle gelir.
+> olarak İngilizce arayüzle gelir.
 
 ## What it actually does
 
