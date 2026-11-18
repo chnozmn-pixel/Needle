@@ -51,7 +51,7 @@ Scope notes below.
 
 ## Install from GitHub
 
-Replace `OWNER` with the GitHub account/organization that hosts this repository
+Replace `chnozmn-pixel` with the GitHub account/organization that hosts this repository
 before publishing the release assets.
 
 ### 1. Release ZIP — recommended for end users
@@ -71,7 +71,7 @@ background daemon.
 This is the simplest auditable route: you compile exactly the code in the repo.
 
 ```bash
-git clone https://github.com/OWNER/Needle.git
+git clone https://github.com/chnozmn-pixel/Needle.git
 cd Needle
 chmod +x scripts/*.sh
 ./scripts/build-app.sh
@@ -85,12 +85,12 @@ bundle, copies the icon and `Info.plist`, and ad-hoc signs it. The output is
 ### 3. Homebrew Cask from this repository
 
 A Cask definition is included at `Casks/needle.rb`. A maintainer replaces the
-`OWNER` placeholders; the SHA-256 is refreshed from
+`chnozmn-pixel` placeholders; the SHA-256 is refreshed from
 `scripts/package-release.sh` for every release. After the Cask is published in
 a tap:
 
 ```bash
-brew tap OWNER/needle
+brew tap chnozmn-pixel/needle
 brew install --cask needle
 ```
 
