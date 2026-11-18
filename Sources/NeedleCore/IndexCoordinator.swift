@@ -1,0 +1,157 @@
+import Foundation
+import Combine
+
+/// MainActor-facing state object used by the SwiftUI views.
+@MainActor
+public final class IndexCoordinator: ObservableObject {
+    @Published public var status = IndexStatus()
+    @Published public var roots: [IndexRoot] = []
+    @Published public var spotlightEnabled = true
+    @Published public var skipPackageContents = true
+    @Published public var excludedFolders: [String] = []
+    @Published public var httpServerEnabled = false
+    @Published public var httpServerPort: UInt16 = 8_080
+    @Published public var httpServerRunning = false
+    @Published public var networkScanConfiguration = NetworkScanConfiguration()
+    @Published public var lastNetworkScanDate: Date?
+    @Published public var errorMessage: String?
+    @Published public var infoMessage: String?
+
+    private let store: IndexStore
+    private let cancellation = CancellationFlag()
+    private var httpServer: SearchHTTPServer?
+
+    public init() {
+        let support = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory() + "/Library/Application Support"))
+            .appendingPathComponent("Needle", isDirectory: true)
+        try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+        store = IndexStore(
+            databasePath: support.appendingPathComponent("index.sqlite").path,
+            cancellation: cancellation
+        )
+    }
+
+    public func start() async {
+        let coordinator = self
+        await store.setStatusHandler { status in
+            Task { @MainActor in coordinator.status = status }
+        }
+        await store.start()
+        await refresh()
+        if httpServerEnabled && httpServer == nil {
+            startHTTPServer(port: httpServerPort)
+        }
+    }
+
+    public func refresh() async {
+        roots = await store.currentRoots()
+        spotlightEnabled = await store.isSpotlightEnabled()
+        skipPackageContents = await store.isSkippingPackageContents()
+        excludedFolders = await store.excludedFolders()
+        httpServerEnabled = await store.isHTTPServerEnabled()
+        httpServerPort = await store.httpServerPort()
+        networkScanConfiguration = await store.networkScanConfiguration()
+        lastNetworkScanDate = await store.lastNetworkScanDate()
+    }
+
+    // MARK: - Actions
+
+    public func rescan() async {
+        infoMessage = nil
+        await store.rescan()
+    }
+
+    public func cancelScan() {
+        cancellation.cancel()
+    }
+
+    public func addRoot(path: String) async {
+        errorMessage = await store.addRoot(path: path)
+        if errorMessage == nil { await refresh() }
+    }
+
+    public func removeRoot(path: String) async {
+        await store.removeRoot(path: path)
+        await refresh()
+    }
+
+    public func addNetworkVolumes() async {
+        let count = await store.addNetworkVolumes()
+        if count > 0 {
+            infoMessage = L("%d ağ birimi eklendi, indeks yenileniyor.", count)
+            await refresh()
+        } else {
+            infoMessage = L("Yeni bağlanmış bir ağ birimi bulunamadı.")
+        }
+    }
+
+    public func setSpotlight(_ enabled: Bool) async {
+        await store.setSpotlight(enabled)
+        spotlightEnabled = enabled
+    }
+
+    public func setSkipPackageContents(_ value: Bool) async {
+        await store.setSkipPackageContents(value)
+        skipPackageContents = value
+    }
+
+    public func setExcludedFolders(_ paths: [String]) async {
+        await store.setExcludedFolders(paths)
+        await refresh()
+    }
+
+    public func setNetworkScanConfiguration(_ configuration: NetworkScanConfiguration) async {
+        await store.setNetworkScanConfiguration(configuration)
+        networkScanConfiguration = configuration
+    }
+
+    public func rescanNetworkRoots() async {
+        infoMessage = L("Ağ konumları taranıyor.")
+        await store.rescanNetworkRoots()
+        lastNetworkScanDate = await store.lastNetworkScanDate()
+    }
+
+    public func setHTTPServer(enabled: Bool, port: UInt16? = nil) async {
+        let resolvedPort = port ?? httpServerPort
+        await store.setHTTPServerSettings(enabled: enabled, port: resolvedPort)
+        httpServerEnabled = enabled
+        httpServerPort = resolvedPort
+        if enabled {
+            startHTTPServer(port: resolvedPort)
+        } else {
+            httpServer?.stop()
+            httpServer = nil
+            httpServerRunning = false
+        }
+    }
+
+    private func startHTTPServer(port: UInt16) {
+        httpServer?.stop()
+        let server = SearchHTTPServer(port: port) { [store] query, limit in
+            await store.search(QueryParser.parse(query), limit: limit)
+        }
+        do {
+            try server.start()
+            httpServer = server
+            httpServerRunning = true
+            errorMessage = nil
+        } catch {
+            httpServer = nil
+            httpServerRunning = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    public func search(_ query: ParsedQuery, limit: Int = 10_000) async -> [SearchResult] {
+        await store.search(query, limit: limit)
+    }
+
+    public func showError(_ message: String?) {
+        errorMessage = message
+    }
+
+    public func clearInfo() {
+        infoMessage = nil
+    }
+}
