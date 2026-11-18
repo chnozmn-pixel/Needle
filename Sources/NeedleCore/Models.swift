@@ -11,6 +11,10 @@ public struct IndexEntry: Sendable, Equatable, Identifiable {
     public let size: Int64
     public let modifiedAt: Date?
     public let createdAt: Date?
+    /// Finder tags are indexed so `tag:` queries work without touching disk.
+    public let tags: [String]
+    /// Finder comment, indexed for `comment:` queries.
+    public let comment: String?
 
     public var url: URL { URL(fileURLWithPath: path) }
     public var parentPath: String { (path as NSString).deletingLastPathComponent }
@@ -20,7 +24,9 @@ public struct IndexEntry: Sendable, Equatable, Identifiable {
         isDirectory: Bool,
         size: Int64,
         modifiedAt: Date?,
-        createdAt: Date?
+        createdAt: Date?,
+        tags: [String] = [],
+        comment: String? = nil
     ) -> IndexEntry {
         let clean = EntryID.normalize(path)
         return IndexEntry(
@@ -31,7 +37,9 @@ public struct IndexEntry: Sendable, Equatable, Identifiable {
             isDirectory: isDirectory,
             size: size,
             modifiedAt: modifiedAt,
-            createdAt: createdAt
+            createdAt: createdAt,
+            tags: tags,
+            comment: comment
         )
     }
 }
@@ -47,11 +55,66 @@ public enum VolumeKind: String, Sendable {
 public struct IndexRoot: Sendable, Equatable, Identifiable {
     public let path: String
     public let kind: VolumeKind
+    /// Disabled roots stay configured but are skipped by scans and watchers.
+    public let isEnabled: Bool
+    /// Paths excluded only for this root, in addition to global exclusions.
+    public let excludedPaths: [String]
+
+    public init(path: String, kind: VolumeKind, isEnabled: Bool = true, excludedPaths: [String] = []) {
+        self.path = path
+        self.kind = kind
+        self.isEnabled = isEnabled
+        self.excludedPaths = excludedPaths
+    }
 
     public var id: String { path }
     public var displayName: String {
         let last = (path as NSString).lastPathComponent
         return last.isEmpty ? path : last
+    }
+}
+
+// MARK: - File lists and journal
+
+public struct FileListInfo: Sendable, Equatable, Identifiable {
+    public let identifier: String
+    public let name: String
+    public let importedAt: Date
+    public let count: Int
+
+    public var id: String { identifier }
+
+    public init(id: String, name: String, importedAt: Date, count: Int) {
+        self.identifier = id
+        self.name = name
+        self.importedAt = importedAt
+        self.count = count
+    }
+}
+
+public struct IndexJournalEntry: Sendable, Equatable, Identifiable {
+    public let sequence: Int64
+    public let path: String
+    public let action: String
+    public let date: Date
+
+    public var id: Int64 { sequence }
+
+    public var actionLabel: String {
+        switch action {
+        case "upsert": return L("Eklendi/güncellendi")
+        case "delete": return L("Silindi")
+        case "fileList": return L("Dosya listesi")
+        case "root": return L("Kök değişikliği")
+        default: return L("Değişiklik")
+        }
+    }
+
+    public init(id: Int64, path: String, action: String, date: Date) {
+        self.sequence = id
+        self.path = path
+        self.action = action
+        self.date = date
     }
 }
 

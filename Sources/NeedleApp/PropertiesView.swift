@@ -3,9 +3,12 @@ import AppKit
 import NeedleCore
 
 struct PropertiesView: View {
+    @EnvironmentObject private var coordinator: IndexCoordinator
     @ObservedObject private var localization = LocalizationManager.shared
     let result: SearchResult
     @Environment(\.dismiss) private var dismiss
+    @State private var tagsText = ""
+    @State private var commentText = ""
 
     private var attributes: [FileAttributeKey: Any]? {
         try? FileManager.default.attributesOfItem(atPath: result.entry.path)
@@ -39,6 +42,41 @@ struct PropertiesView: View {
                 row(L("Kimlik"), String(format: "%016llx", result.entry.id))
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L("Finder Etiketleri"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField(L("Etiketleri virgülle ayırın"), text: $tagsText)
+                    .textFieldStyle(.roundedBorder)
+                Text(L("Finder Yorumu"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField(L("Yorum ekleyin…"), text: $commentText)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Button(L("Kaydet")) {
+                        let tags = tagsText
+                            .components(separatedBy: ",")
+                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .filter { !$0.isEmpty }
+                        Task {
+                            await coordinator.replaceTags(paths: [result.entry.path], tags: tags)
+                            await coordinator.setComment(
+                                paths: [result.entry.path],
+                                comment: commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? nil : commentText
+                            )
+                        }
+                    }
+                    .disabled(result.source == .spotlight)
+                    Text(L("Yalnızca yerel dosyalarda düzenlenebilir."))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
             Spacer(minLength: 8)
 
             HStack {
@@ -52,7 +90,11 @@ struct PropertiesView: View {
             }
         }
         .padding(22)
-        .frame(width: 560, height: 420)
+        .frame(width: 560, height: 540)
+        .onAppear {
+            tagsText = FileMetadata.readTags(at: result.entry.path).joined(separator: ", ")
+            commentText = FileMetadata.readComment(at: result.entry.path) ?? ""
+        }
     }
 
     private func row(_ label: String, _ value: String) -> some View {

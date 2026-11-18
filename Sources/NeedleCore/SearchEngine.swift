@@ -270,7 +270,12 @@ public final class SearchEngine: @unchecked Sendable {
     }
 
     private static func canUsePostings(for term: TextTerm) -> Bool {
-        guard term.field != .content else { return false }
+        switch term.field {
+        case .content, .tag, .comment:
+            return false
+        default:
+            break
+        }
         guard term.mode != .regex, term.mode != .wildcard else { return false }
         guard !term.options.caseSensitive else { return false }
         guard term.options.diacritics || term.text.utf8.allSatisfy({ $0 < 128 }) else { return false }
@@ -411,6 +416,10 @@ public final class SearchEngine: @unchecked Sendable {
             return components.first.map(String.init) ?? "/"
         case .content:
             return context.content(for: slot.entry) ?? ""
+        case .tag:
+            return slot.entry.tags.joined(separator: "\n")
+        case .comment:
+            return slot.entry.comment ?? ""
         }
     }
 
@@ -638,15 +647,11 @@ private final class EvaluationContext {
 
     func content(for entry: IndexEntry) -> String? {
         if let cached = contentCache[entry.id] { return cached }
-        let value: String?
-        if !entry.isDirectory,
-           let data = try? Data(contentsOf: entry.url, options: .mappedIfSafe),
-           data.count <= 8 * 1024 * 1024 {
-            value = String(data: data, encoding: .utf8)
-                ?? String(decoding: data, as: UTF8.self)
-        } else {
-            value = nil
-        }
+        let value = ContentExtractor.text(
+            for: entry.url,
+            pathExtension: (entry.name as NSString).pathExtension.lowercased(),
+            isDirectory: entry.isDirectory
+        )
         contentCache[entry.id] = value
         return value
     }

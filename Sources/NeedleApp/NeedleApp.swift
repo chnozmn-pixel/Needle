@@ -14,6 +14,9 @@ extension Notification.Name {
     static let needleAdvancedSearch = Notification.Name("needle.advancedSearch")
     static let needleExportCSV = Notification.Name("needle.exportCSV")
     static let needleExportTXT = Notification.Name("needle.exportTXT")
+    static let needleExportEFU = Notification.Name("needle.exportEFU")
+    static let needleImportEFU = Notification.Name("needle.importEFU")
+    static let needleJournal = Notification.Name("needle.journal")
 }
 
 @main
@@ -78,6 +81,16 @@ struct NeedleApp: App {
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 Button(L("Metin Olarak Dışa Aktar…")) {
                     NotificationCenter.default.post(name: .needleExportTXT, object: nil)
+                }
+                Button(L("EFU Dosya Listesi Olarak Dışa Aktar…")) {
+                    NotificationCenter.default.post(name: .needleExportEFU, object: nil)
+                }
+                Button(L("EFU Dosya Listesi Ekle…")) {
+                    NotificationCenter.default.post(name: .needleImportEFU, object: nil)
+                }
+                Divider()
+                Button(L("İndeks Günlüğü…")) {
+                    NotificationCenter.default.post(name: .needleJournal, object: nil)
                 }
             }
 

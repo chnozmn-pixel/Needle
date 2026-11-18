@@ -17,17 +17,26 @@ public enum FileSystem {
 
     // MARK: - Single entry
 
-    public static func entry(at path: String) -> IndexEntry? {
+    public static func entry(at path: String, includeMetadata: Bool = true) -> IndexEntry? {
         var info = stat()
         guard lstat(path, &info) == 0 else { return nil }
         let isDirectory = (info.st_mode & S_IFMT) == S_IFDIR
+        let metadata = includeMetadata ? finderMetadata(at: path) : ([], nil)
         return IndexEntry.make(
             path: path,
             isDirectory: isDirectory,
             size: isDirectory ? 0 : Int64(info.st_size),
             modifiedAt: Date(timeIntervalSince1970: Double(info.st_mtimespec.tv_sec)),
-            createdAt: Date(timeIntervalSince1970: Double(info.st_birthtimespec.tv_sec))
+            createdAt: Date(timeIntervalSince1970: Double(info.st_birthtimespec.tv_sec)),
+            tags: metadata.0,
+            comment: metadata.1
         )
+    }
+
+    /// Finder tags and comments are stored as extended attributes. Reading them
+    /// is optional because it is measurably slower than `lstat` alone.
+    private static func finderMetadata(at path: String) -> ([String], String?) {
+        (FileMetadata.readTags(at: path), FileMetadata.readComment(at: path))
     }
 
     // MARK: - Fast full scan
@@ -44,6 +53,7 @@ public enum FileSystem {
     public static func scan(
         root: String,
         skipPackageContents: Bool,
+        includeMetadata: Bool = true,
         excludedPaths: [String] = [],
         isCancelled: @escaping () -> Bool,
         onBatch: ([IndexEntry]) async throws -> Void,
@@ -68,7 +78,7 @@ public enum FileSystem {
             if scanned % 512 == 0 { await onProgress(scanned) }
         }
 
-        if let rootEntry = entry(at: root) { await add(rootEntry) }
+        if let rootEntry = entry(at: root, includeMetadata: includeMetadata) { await add(rootEntry) }
 
         func isExcluded(_ path: String) -> Bool {
             excludedPaths.contains { path == $0 || path.hasPrefix($0 + "/") }
@@ -97,12 +107,15 @@ public enum FileSystem {
                 guard lstat(path, &info) == 0 else { continue }
 
                 let isDirectory = (info.st_mode & S_IFMT) == S_IFDIR
+                let metadata = includeMetadata ? finderMetadata(at: path) : ([], nil)
                 await add(IndexEntry.make(
                     path: path,
                     isDirectory: isDirectory,
                     size: isDirectory ? 0 : Int64(info.st_size),
                     modifiedAt: Date(timeIntervalSince1970: Double(info.st_mtimespec.tv_sec)),
-                    createdAt: Date(timeIntervalSince1970: Double(info.st_birthtimespec.tv_sec))
+                    createdAt: Date(timeIntervalSince1970: Double(info.st_birthtimespec.tv_sec)),
+                    tags: metadata.0,
+                    comment: metadata.1
                 ))
 
                 if isDirectory {

@@ -18,6 +18,8 @@ struct SettingsView: View {
                 .tabItem { Label(L("Arama"), systemImage: "magnifyingglass") }
             historyTab
                 .tabItem { Label(L("Geçmiş"), systemImage: "clock") }
+            fileListsTab
+                .tabItem { Label(L("Dosya Listeleri"), systemImage: "doc.text") }
             syntaxTab
                 .tabItem { Label(L("Sözdizimi"), systemImage: "questionmark.circle") }
         }
@@ -33,6 +35,9 @@ struct SettingsView: View {
             Text(L("Kendi indeksiniz bu klasörlerdeki tüm dosya ve klasörleri tarar. Ağ birimlerini eklemek için bağlı olduklarından emin olun."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Text(L("Bir kökü devre dışı bırakabilir veya yalnızca o kök için dışlama yolları ekleyebilirsiniz."))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
 
             List {
                 Section(L("Kökler")) {
@@ -50,6 +55,40 @@ struct SettingsView: View {
                             if root.kind == .network {
                                 Text(L("Ağ")).font(.caption2).foregroundStyle(.purple)
                             }
+                            Toggle("", isOn: Binding(
+                                get: { root.isEnabled },
+                                set: { value in
+                                    Task { await coordinator.setRootEnabled(path: root.path, enabled: value) }
+                                }
+                            ))
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+                            .help(L("Kökü etkinleştir/devre dışı bırak"))
+                            Menu {
+                                if root.excludedPaths.isEmpty {
+                                    Text(L("Köke özel dışlama yok")).foregroundStyle(.secondary)
+                                } else {
+                                    ForEach(root.excludedPaths, id: \.self) { path in
+                                        Button(path) {
+                                            var updated = root.excludedPaths
+                                            updated.removeAll { $0 == path }
+                                            Task {
+                                                await coordinator.setRootExcludedPaths(
+                                                    path: root.path, paths: updated
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Divider()
+                                }
+                                Button(L("Bu kök için dışlama ekle…")) {
+                                    addExcludedFolders(for: root)
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .help(L("Kök ayarları"))
                             Button {
                                 Task { await coordinator.removeRoot(path: root.path) }
                             } label: {
@@ -191,6 +230,13 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
+                Picker(L("Sonuç görünümü"), selection: $preferences.viewMode) {
+                    ForEach(ResultViewMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 LabeledContent(L("Sonuç sınırı"), value: "\(preferences.resultLimit)")
                 Slider(
                     value: Binding(
@@ -250,6 +296,13 @@ struct SettingsView: View {
                     get: { coordinator.skipPackageContents },
                     set: { value in Task { await coordinator.setSkipPackageContents(value) } }
                 ))
+                Toggle(L("Finder etiketlerini ve yorumlarını indeksle"), isOn: Binding(
+                    get: { coordinator.finderMetadataEnabled },
+                    set: { value in Task { await coordinator.setFinderMetadata(value) } }
+                ))
+                Text(L("tag: ve comment: aramaları için gerekir; her dosyanın genişletilmiş özniteliklerini okur."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(L("Dışlanan klasörler de dahil tüm değişiklikler yeniden taramada uygulanır."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -379,7 +432,9 @@ struct SettingsView: View {
                     SyntaxRow(query: "regex:^photo\\d+\\.jpg$", meaning: L("Düzenli ifade"))
                     SyntaxRow(query: L("case:RAPOR"), meaning: L("Büyük/küçük harfe duyarlı"))
                     SyntaxRow(query: L("wholewords:rapor"), meaning: L("Tam kelime"))
-                    SyntaxRow(query: "content:needle", meaning: L("Dosya içeriğinde ara"))
+                    SyntaxRow(query: "content:needle", meaning: L("Dosya içeriğinde ara (PDF ve görsellerde OCR)"))
+                    SyntaxRow(query: "tag:Önemli", meaning: L("Finder etiketi"))
+                    SyntaxRow(query: "comment:taslak", meaning: L("Finder yorumu"))
                     SyntaxRow(query: "child:*.mp3", meaning: L("Eşleşen alt öğesi olan klasörler"))
                     SyntaxRow(query: "empty:", meaning: L("Boş klasörler"))
                 }
@@ -397,6 +452,90 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(20)
+        }
+    }
+
+    // MARK: - File lists and journal
+
+    private var fileListsTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L("EFU dosya listeleri"))
+                .font(.headline)
+            Text(L("Everything uyumlu EFU listeleri çevrimdışı medyayı, yedekleri veya geçici olarak bağlı olmayan konumları indekse ekler. Listeler yeniden taramada korunur."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            List {
+                Section(L("İçe Aktarılan Listeler")) {
+                    if coordinator.fileLists.isEmpty {
+                        Text(L("Henüz dosya listesi eklenmedi"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(coordinator.fileLists) { list in
+                            HStack {
+                                Image(systemName: "doc.text").foregroundStyle(.purple)
+                                VStack(alignment: .leading) {
+                                    Text(list.name)
+                                    Text(L("%d kayıt · %@", list.count, formatDate(list.importedAt)))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button {
+                                    Task { await coordinator.removeFileList(id: list.identifier) }
+                                } label: {
+                                    Image(systemName: "trash").foregroundStyle(.red)
+                                }
+                                .buttonStyle(.borderless)
+                                .help(L("Listeyi kaldır"))
+                            }
+                        }
+                    }
+                }
+
+                Section(L("Son Değişiklikler")) {
+                    if coordinator.journalEntries.isEmpty {
+                        Text(L("Henüz değişiklik yok"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(coordinator.journalEntries.prefix(40)) { entry in
+                            HStack {
+                                Image(systemName: entry.action == "delete" ? "minus.circle" : "plus.circle")
+                                    .foregroundStyle(entry.action == "delete" ? .red : .green)
+                                VStack(alignment: .leading) {
+                                    Text(entry.path).font(.caption).lineLimit(1).truncationMode(.middle)
+                                    Text(entry.actionLabel)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(formatDate(entry.date))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.inset)
+            .frame(minHeight: 200)
+
+            HStack {
+                Button(L("EFU Dosya Listesi Ekle…")) { importEFU() }
+                Spacer()
+                Button(L("Günlüğü Temizle"), role: .destructive) {
+                    Task { await coordinator.clearJournal() }
+                }
+            }
+        }
+        .padding(20)
+        .onAppear {
+            Task {
+                await coordinator.refresh()
+                await coordinator.loadJournal()
+            }
         }
     }
 
@@ -428,6 +567,49 @@ struct SettingsView: View {
             let paths = panel.urls.map(\.path)
             Task { @MainActor in
                 for path in paths { await coordinator.addRoot(path: path) }
+            }
+        }
+    }
+
+    private func addExcludedFolders(for root: IndexRoot) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = true
+        panel.begin { response in
+            guard response == .OK else { return }
+            var updated = root.excludedPaths
+            for path in panel.urls.map(\.path) where !updated.contains(path) {
+                updated.append(path)
+            }
+            Task { @MainActor in
+                await coordinator.setRootExcludedPaths(path: root.path, paths: updated)
+            }
+        }
+    }
+
+    private func importEFU() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = L("Ekle")
+        panel.message = L("EFU dosya listesini seçin")
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let text = try? String(contentsOf: url, encoding: .utf8)
+            Task { @MainActor in
+                guard let text else {
+                    coordinator.showError(L("Dosya listesi okunamadı."))
+                    return
+                }
+                if let error = await coordinator.importEFU(
+                    name: url.lastPathComponent,
+                    text: text,
+                    baseURL: url.deletingLastPathComponent()
+                ) {
+                    coordinator.showError(error)
+                }
             }
         }
     }

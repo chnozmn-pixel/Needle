@@ -20,6 +20,7 @@ struct MainWindow: View {
     @State private var showAdvanced = false
     @State private var propertiesResult: SearchResult?
     @State private var selectedRootPath: String?
+    @State private var showJournal = false
     @FocusState private var searchFocused: Bool
 
     private var effectiveQuery: String {
@@ -50,6 +51,56 @@ struct MainWindow: View {
     }
 
     var body: some View {
+        lifecycleContent
+            .modifier(CommandReceiver(name: .needleOpenSelected, action: openSelected))
+            .modifier(CommandReceiver(name: .needleRevealSelected, action: revealSelected))
+            .modifier(CommandReceiver(name: .needlePreviewSelected, action: previewSelected))
+            .modifier(CommandReceiver(name: .needleCopyPaths, action: copySelectedPaths))
+            .modifier(CommandReceiver(name: .needleCopyNames, action: copySelectedNames))
+            .modifier(CommandReceiver(name: .needleProperties, action: showProperties))
+            .modifier(CommandReceiver(name: .needleAdvancedSearch, action: { showAdvanced = true }))
+            .modifier(CommandReceiver(name: .needleExportCSV, action: { export(.csv) }))
+            .modifier(CommandReceiver(name: .needleExportTXT, action: { export(.txt) }))
+            .modifier(CommandReceiver(name: .needleExportEFU, action: { export(.efu) }))
+            .modifier(CommandReceiver(name: .needleImportEFU, action: importEFU))
+            .modifier(CommandReceiver(name: .needleJournal, action: { showJournal = true }))
+            .modifier(CommandReceiver(name: .needleFocusSearch, action: { searchFocused = true }))
+            .modifier(CommandReceiver(name: .needleShowWindow, action: showWindow))
+            .alert(
+                L("Hata"),
+                isPresented: Binding(
+                    get: { coordinator.errorMessage != nil },
+                    set: { if !$0 { coordinator.showError(nil) } }
+                )
+            ) {
+                Button(L("Tamam"), role: .cancel) {}
+            } message: {
+                Text(coordinator.errorMessage ?? "")
+            }
+    }
+
+    private var lifecycleContent: some View {
+        windowContent
+            .onAppear {
+                searchFocused = true
+                HotKeyManager.shared.register { showWindow() }
+                installKeyMonitor()
+                scheduleSearch()
+            }
+            .task { await coordinator.start() }
+            .onChange(of: query) { _ in scheduleSearch() }
+            .onChange(of: coordinator.status.revision) { _ in scheduleSearch() }
+            .onChange(of: coordinator.spotlightEnabled) { _ in scheduleSearch() }
+            .onChange(of: sortField) { _ in recomputeDisplayed() }
+            .onChange(of: sortAscending) { _ in recomputeDisplayed() }
+            .onChange(of: selectedRootPath) { _ in recomputeDisplayed() }
+            .onChange(of: preferences.visibleColumns) { _ in recomputeDisplayed() }
+            .onDisappear {
+                if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            }
+    }
+
+    private var windowContent: some View {
         HSplitView {
             if showSidebar { sidebar }
             mainPane
@@ -59,48 +110,10 @@ struct MainWindow: View {
             AdvancedSearchView(query: $query)
         }
         .sheet(item: $propertiesResult) { result in
-            PropertiesView(result: result)
+            PropertiesView(result: result).environmentObject(coordinator)
         }
-        .onAppear {
-            searchFocused = true
-            HotKeyManager.shared.register { showWindow() }
-            installKeyMonitor()
-            scheduleSearch()
-        }
-        .task {
-            await coordinator.start()
-        }
-        .onChange(of: query) { _ in scheduleSearch() }
-        .onChange(of: coordinator.status.revision) { _ in scheduleSearch() }
-        .onChange(of: coordinator.spotlightEnabled) { _ in scheduleSearch() }
-        .onChange(of: sortField) { _ in recomputeDisplayed() }
-        .onChange(of: sortAscending) { _ in recomputeDisplayed() }
-        .onChange(of: selectedRootPath) { _ in recomputeDisplayed() }
-        .onChange(of: preferences.visibleColumns) { _ in recomputeDisplayed() }
-        .onDisappear {
-            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .needleOpenSelected)) { _ in openSelected() }
-        .onReceive(NotificationCenter.default.publisher(for: .needleRevealSelected)) { _ in revealSelected() }
-        .onReceive(NotificationCenter.default.publisher(for: .needlePreviewSelected)) { _ in previewSelected() }
-        .onReceive(NotificationCenter.default.publisher(for: .needleCopyPaths)) { _ in copySelectedPaths() }
-        .onReceive(NotificationCenter.default.publisher(for: .needleCopyNames)) { _ in copySelectedNames() }
-        .onReceive(NotificationCenter.default.publisher(for: .needleProperties)) { _ in showProperties() }
-        .onReceive(NotificationCenter.default.publisher(for: .needleAdvancedSearch)) { _ in showAdvanced = true }
-        .onReceive(NotificationCenter.default.publisher(for: .needleExportCSV)) { _ in export(.csv) }
-        .onReceive(NotificationCenter.default.publisher(for: .needleExportTXT)) { _ in export(.txt) }
-        .onReceive(NotificationCenter.default.publisher(for: .needleFocusSearch)) { _ in searchFocused = true }
-        .onReceive(NotificationCenter.default.publisher(for: .needleShowWindow)) { _ in showWindow() }
-        .alert(
-            L("Hata"),
-            isPresented: Binding(
-                get: { coordinator.errorMessage != nil },
-                set: { if !$0 { coordinator.showError(nil) } }
-            )
-        ) {
-            Button(L("Tamam"), role: .cancel) {}
-        } message: {
-            Text(coordinator.errorMessage ?? "")
+        .sheet(isPresented: $showJournal) {
+            IndexJournalView().environmentObject(coordinator)
         }
     }
 
@@ -112,21 +125,38 @@ struct MainWindow: View {
             Divider()
             toolbar
             resultHeader
-            ResultTable(
-                results: displayedResults,
-                terms: parsed.nameTerms,
-                selection: $selection,
-                sortField: $sortField,
-                sortAscending: $sortAscending,
-                visibleColumns: $preferences.visibleColumns,
-                onOpen: open,
-                onReveal: reveal,
-                onPreview: preview,
-                onProperties: { propertiesResult = $0 }
-            )
+            resultsPane
             statusBar
         }
         .frame(minWidth: 720)
+    }
+
+    private var resultsPane: some View {
+        Group {
+            if preferences.viewMode == .grid {
+                ResultGalleryView(
+                    results: displayedResults,
+                    terms: parsed.nameTerms,
+                    selection: $selection,
+                    onOpen: open,
+                    onPreview: preview,
+                    onProperties: { propertiesResult = $0 }
+                )
+            } else {
+                ResultTable(
+                    results: displayedResults,
+                    terms: parsed.nameTerms,
+                    selection: $selection,
+                    sortField: $sortField,
+                    sortAscending: $sortAscending,
+                    visibleColumns: $preferences.visibleColumns,
+                    onOpen: open,
+                    onReveal: reveal,
+                    onPreview: preview,
+                    onProperties: { propertiesResult = $0 }
+                )
+            }
+        }
     }
 
     private var searchBar: some View {
@@ -209,6 +239,9 @@ struct MainWindow: View {
             Menu {
                 Button(L("CSV…")) { export(.csv) }
                 Button(L("Metin…")) { export(.txt) }
+                Button(L("EFU…")) { export(.efu) }
+                Divider()
+                Button(L("EFU Dosya Listesi Ekle…")) { importEFU() }
                 Divider()
                 Button(L("Yolları Kopyala")) { copySelectedPaths() }
                 Button(L("Adları Kopyala")) { copySelectedNames() }
@@ -237,6 +270,19 @@ struct MainWindow: View {
                     .background(.purple.opacity(0.1), in: Capsule())
                     .lineLimit(1)
             }
+
+            Menu {
+                ForEach(ResultViewMode.allCases) { mode in
+                    Button {
+                        preferences.viewMode = mode
+                    } label: {
+                        Label(mode.title, systemImage: mode.systemImage)
+                    }
+                }
+            } label: {
+                Image(systemName: preferences.viewMode.systemImage)
+            }
+            .help(ResultViewMode.thumbnailsTitle)
 
             Toggle(L("Spotlight"), isOn: Binding(
                 get: { coordinator.spotlightEnabled },
@@ -606,6 +652,7 @@ struct MainWindow: View {
     private enum ExportFormat: String {
         case csv
         case txt
+        case efu
     }
 
     private func export(_ format: ExportFormat) {
@@ -635,8 +682,36 @@ struct MainWindow: View {
             content = lines.joined(separator: "\n") + "\n"
         case .txt:
             content = items.map(\.entry.path).joined(separator: "\n") + "\n"
+        case .efu:
+            content = FileList.encodeEFU(FileList.items(from: items.map(\.entry)))
         }
         try? content.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func importEFU() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = L("Ekle")
+        panel.message = L("EFU dosya listesini seçin")
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let text = try? String(contentsOf: url, encoding: .utf8)
+            Task { @MainActor in
+                guard let text else {
+                    coordinator.showError(L("Dosya listesi okunamadı."))
+                    return
+                }
+                if let error = await coordinator.importEFU(
+                    name: url.lastPathComponent,
+                    text: text,
+                    baseURL: url.deletingLastPathComponent()
+                ) {
+                    coordinator.showError(error)
+                }
+            }
+        }
     }
 
     private static func csvEscape(_ value: String) -> String {
@@ -669,6 +744,15 @@ struct MainWindow: View {
                 for path in paths { await coordinator.addRoot(path: path) }
             }
         }
+    }
+}
+
+private struct CommandReceiver: ViewModifier {
+    let name: Notification.Name
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onReceive(NotificationCenter.default.publisher(for: name)) { _ in action() }
     }
 }
 

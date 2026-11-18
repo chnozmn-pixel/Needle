@@ -41,6 +41,8 @@ public actor IndexStore {
     private var isScanning = false
     private var spotlightEnabled = true
     private var skipPackageContents = true
+    private var finderMetadataEnabled = true
+    private var importedFileLists: [FileListInfo] = []
     private var networkReconciliationTask: Task<Void, Never>?
     private var scanConfiguration = NetworkScanConfiguration()
     private var lastNetworkScanAt: Date?
@@ -49,6 +51,10 @@ public actor IndexStore {
     private var userExcludedPaths: [String] = []
 
     private var excludedPaths: [String] { internalExcludedPaths + userExcludedPaths }
+
+    private func excludedPaths(for root: IndexRoot) -> [String] {
+        excludedPaths + root.excludedPaths
+    }
 
     public init(
         databasePath: String,
@@ -90,6 +96,8 @@ public actor IndexStore {
             roots = savedRoots
             spotlightEnabled = (database.meta("spotlightEnabled") != "0")
             skipPackageContents = (database.meta("skipPackageContents") != "0")
+            finderMetadataEnabled = (database.meta("indexFinderMetadata") != "0")
+            importedFileLists = database.loadFileLists()
             userExcludedPaths = (database.meta("excludedFolders") ?? "")
                 .split(separator: "\n")
                 .map(String.init)
@@ -129,6 +137,9 @@ public actor IndexStore {
     public func isSpotlightEnabled() -> Bool { spotlightEnabled }
     public func isSkippingPackageContents() -> Bool { skipPackageContents }
     public func excludedFolders() -> [String] { userExcludedPaths }
+    public func isFinderMetadataEnabled() -> Bool { finderMetadataEnabled }
+    public func fileLists() -> [FileListInfo] { importedFileLists }
+    public func recentJournal(limit: Int = 100) -> [IndexJournalEntry] { database.loadJournal(limit: limit) }
     public func isHTTPServerEnabled() -> Bool { database.meta("httpEnabled") == "1" }
     public func httpServerPort() -> UInt16 {
         UInt16(database.meta("httpPort") ?? "") ?? 8_080
@@ -158,6 +169,7 @@ public actor IndexStore {
             .filter { !$0.isEmpty && !internalExcludedPaths.contains($0) }
         userExcludedPaths = Array(Set(cleaned)).sorted()
         try? database.setMeta("excludedFolders", value: userExcludedPaths.joined(separator: "\n"))
+        database.appendJournal(path: L("Dışlanan klasörler"), action: "root")
         await rescan()
     }
 
@@ -173,6 +185,76 @@ public actor IndexStore {
         try? database.setMeta("skipPackageContents", value: value ? "1" : "0")
     }
 
+    public func setFinderMetadata(_ value: Bool) async {
+        finderMetadataEnabled = value
+        try? database.setMeta("indexFinderMetadata", value: value ? "1" : "0")
+        await rescan()
+    }
+
+    // MARK: - EFU file lists
+
+    public func importFileList(name: String, items: [FileListItem]) async -> String? {
+        guard !items.isEmpty else { return L("Dosya listesi boş.") }
+        let id = UUID().uuidString
+        do {
+            try database.addFileList(id: id, name: name, items: items)
+            database.appendJournal(path: name, action: "fileList")
+            importedFileLists = database.loadFileLists()
+            let entries = try database.loadAllEntries()
+            engine.rebuild(from: entries)
+            status.totalEntries = entries.count
+            status.lastUpdate = Date()
+            publish()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    public func removeFileList(id: String) async {
+        guard let list = importedFileLists.first(where: { $0.identifier == id }) else { return }
+        try? database.removeFileList(id: id)
+        database.appendJournal(path: list.name, action: "fileList")
+        importedFileLists = database.loadFileLists()
+        let entries = (try? database.loadAllEntries()) ?? []
+        engine.rebuild(from: entries)
+        status.totalEntries = entries.count
+        status.lastUpdate = Date()
+        publish()
+    }
+
+    public func clearJournal() {
+        try? database.clearJournal()
+        publish()
+    }
+
+    // MARK: - Root settings
+
+    public func setRootEnabled(path: String, enabled: Bool) async {
+        guard let index = roots.firstIndex(where: { $0.path == path }) else { return }
+        let old = roots[index]
+        roots[index] = IndexRoot(
+            path: old.path, kind: old.kind, isEnabled: enabled, excludedPaths: old.excludedPaths
+        )
+        try? database.setRoots(roots)
+        database.appendJournal(path: path, action: "root")
+        await rescan()
+    }
+
+    public func setRootExcludedPaths(path: String, paths: [String]) async {
+        guard let index = roots.firstIndex(where: { $0.path == path }) else { return }
+        let old = roots[index]
+        let cleaned = paths
+            .map { EntryID.normalize($0) }
+            .filter { !$0.isEmpty && $0 != old.path }
+        roots[index] = IndexRoot(
+            path: old.path, kind: old.kind, isEnabled: old.isEnabled, excludedPaths: Array(Set(cleaned)).sorted()
+        )
+        try? database.setRoots(roots)
+        database.appendJournal(path: path, action: "root")
+        await rescan()
+    }
+
     // MARK: - Roots
 
     public func addRoot(path: String) async -> String? {
@@ -185,6 +267,7 @@ public actor IndexStore {
 
         roots.append(IndexRoot(path: clean, kind: FileSystem.volumeKind(for: clean)))
         try? database.setRoots(roots)
+        database.appendJournal(path: clean, action: "root")
         await rescan()
         return nil
     }
@@ -192,6 +275,7 @@ public actor IndexStore {
     public func removeRoot(path: String) async {
         roots.removeAll { $0.path == path }
         try? database.setRoots(roots)
+        database.appendJournal(path: path, action: "root")
         try? database.deleteSubtree(path: path)
         let entries = (try? database.loadAllEntries()) ?? []
         engine.rebuild(from: entries)
@@ -214,6 +298,7 @@ public actor IndexStore {
                   !roots.contains(where: { $0.path == path }) else { continue }
             guard FileSystem.volumeKind(for: path) == .network else { continue }
             roots.append(IndexRoot(path: path, kind: .network))
+            database.appendJournal(path: path, action: "root")
             added += 1
         }
         guard added > 0 else { return 0 }
@@ -240,11 +325,12 @@ public actor IndexStore {
             try database.deleteAll()
             engine.beginBulk()
 
-            for root in roots {
+            for root in roots where root.isEnabled {
                 try await FileSystem.scan(
                     root: root.path,
                     skipPackageContents: skipPackageContents,
-                    excludedPaths: excludedPaths,
+                    includeMetadata: finderMetadataEnabled,
+                    excludedPaths: excludedPaths(for: root),
                     isCancelled: { [cancellation] in cancellation.isCancelled },
                     onBatch: { [database, engine] batch in
                         for entry in batch { try database.upsert(entry) }
@@ -294,18 +380,22 @@ public actor IndexStore {
 
         for path in paths {
             let clean = EntryID.normalize(path)
-            guard roots.contains(where: { clean == $0.path || clean.hasPrefix($0.path + "/") }) else { continue }
+            guard roots.contains(where: {
+                $0.isEnabled && (clean == $0.path || clean.hasPrefix($0.path + "/"))
+            }) else { continue }
             // Ignore our own database files — writing them would otherwise
             // generate another FSEvent and create an endless update loop.
             guard !excludedPaths.contains(where: {
                 clean == $0 || clean.hasPrefix($0 + "/")
             }) else { continue }
 
-            if let entry = FileSystem.entry(at: clean) {
+            if let entry = FileSystem.entry(at: clean, includeMetadata: finderMetadataEnabled) {
                 try? database.upsert(entry)
+                database.appendJournal(path: clean, action: "upsert")
                 changes.append(.upsert(entry))
             } else {
                 try? database.deleteSubtree(path: clean)
+                database.appendJournal(path: clean, action: "delete")
                 changes.append(.delete(path: clean))
             }
         }
@@ -320,7 +410,7 @@ public actor IndexStore {
     /// Reconciles only network roots. Local entries stay untouched, so this is
     /// much cheaper than a full rescan and is what the schedule uses.
     public func rescanNetworkRoots() async {
-        let networkRoots = roots.filter { $0.kind == .network }
+        let networkRoots = roots.filter { $0.kind == .network && $0.isEnabled }
         guard !networkRoots.isEmpty, !isScanning else { return }
         isScanning = true
         cancellation.reset()
@@ -339,7 +429,8 @@ public actor IndexStore {
                 try await FileSystem.scan(
                     root: root.path,
                     skipPackageContents: skipPackageContents,
-                    excludedPaths: excludedPaths,
+                    includeMetadata: finderMetadataEnabled,
+                    excludedPaths: excludedPaths(for: root),
                     isCancelled: { [cancellation] in cancellation.isCancelled },
                     onBatch: { [database] batch in
                         for entry in batch { try database.upsert(entry) }
@@ -421,7 +512,7 @@ public actor IndexStore {
     }
 
     private func runScheduledNetworkScan(_ configuration: NetworkScanConfiguration) async {
-        guard roots.contains(where: { $0.kind == .network }) else { return }
+        guard roots.contains(where: { $0.kind == .network && $0.isEnabled }) else { return }
 
         switch configuration.schedule {
         case .idle:
@@ -444,8 +535,9 @@ public actor IndexStore {
 
     private func restartWatcher() {
         watcher?.stop()
-        guard !roots.isEmpty else { return }
-        let watchedPaths = roots.map(\.path)
+        let enabledRoots = roots.filter(\.isEnabled)
+        guard !enabledRoots.isEmpty else { return }
+        let watchedPaths = enabledRoots.map(\.path)
         let store = self
         watcher = FSEventsWatcher(paths: watchedPaths) { paths in
             Task { await store.handleEvents(paths) }

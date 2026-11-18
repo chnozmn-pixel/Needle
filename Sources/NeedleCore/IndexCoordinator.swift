@@ -8,7 +8,10 @@ public final class IndexCoordinator: ObservableObject {
     @Published public var roots: [IndexRoot] = []
     @Published public var spotlightEnabled = true
     @Published public var skipPackageContents = true
+    @Published public var finderMetadataEnabled = true
     @Published public var excludedFolders: [String] = []
+    @Published public var fileLists: [FileListInfo] = []
+    @Published public var journalEntries: [IndexJournalEntry] = []
     @Published public var httpServerEnabled = false
     @Published public var httpServerPort: UInt16 = 8_080
     @Published public var httpServerRunning = false
@@ -48,7 +51,10 @@ public final class IndexCoordinator: ObservableObject {
         roots = await store.currentRoots()
         spotlightEnabled = await store.isSpotlightEnabled()
         skipPackageContents = await store.isSkippingPackageContents()
+        finderMetadataEnabled = await store.isFinderMetadataEnabled()
         excludedFolders = await store.excludedFolders()
+        fileLists = await store.fileLists()
+        journalEntries = await store.recentJournal()
         httpServerEnabled = await store.isHTTPServerEnabled()
         httpServerPort = await store.httpServerPort()
         networkScanConfiguration = await store.networkScanConfiguration()
@@ -94,6 +100,65 @@ public final class IndexCoordinator: ObservableObject {
     public func setSkipPackageContents(_ value: Bool) async {
         await store.setSkipPackageContents(value)
         skipPackageContents = value
+    }
+
+    public func setFinderMetadata(_ value: Bool) async {
+        await store.setFinderMetadata(value)
+        finderMetadataEnabled = value
+    }
+
+    public func setRootEnabled(path: String, enabled: Bool) async {
+        await store.setRootEnabled(path: path, enabled: enabled)
+        await refresh()
+    }
+
+    public func setRootExcludedPaths(path: String, paths: [String]) async {
+        await store.setRootExcludedPaths(path: path, paths: paths)
+        await refresh()
+    }
+
+    public func importEFU(name: String, text: String, baseURL: URL?) async -> String? {
+        let items = FileList.parseEFU(text, baseURL: baseURL)
+        guard !items.isEmpty else { return L("Dosya listesi boş veya geçersiz.") }
+        let error = await store.importFileList(name: name, items: items)
+        if error == nil {
+            infoMessage = L("%d kayıtlık dosya listesi eklendi.", items.count)
+        }
+        await refresh()
+        return error
+    }
+
+    public func removeFileList(id: String) async {
+        await store.removeFileList(id: id)
+        await refresh()
+    }
+
+    public func loadJournal(limit: Int = 100) async {
+        journalEntries = await store.recentJournal(limit: limit)
+    }
+
+    public func clearJournal() async {
+        await store.clearJournal()
+        await loadJournal()
+    }
+
+    public func replaceTags(paths: [String], tags: [String]) async {
+        guard !paths.isEmpty else { return }
+        FileMetadata.setTags(tags, for: paths)
+        await store.handleEvents(paths)
+    }
+
+    public func setTags(paths: [String], adding: [String], removing: [String]) async {
+        guard !paths.isEmpty else { return }
+        if !adding.isEmpty { FileMetadata.addTags(adding, to: paths) }
+        if !removing.isEmpty { FileMetadata.removeTags(removing, from: paths) }
+        await store.handleEvents(paths)
+    }
+
+    public func setComment(paths: [String], comment: String?) async {
+        guard !paths.isEmpty else { return }
+        FileMetadata.setComment(comment, for: paths)
+        await store.handleEvents(paths)
     }
 
     public func setExcludedFolders(_ paths: [String]) async {

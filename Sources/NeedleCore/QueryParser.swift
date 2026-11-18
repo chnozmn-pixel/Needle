@@ -623,6 +623,7 @@ public enum QueryParser {
             "empty", "child", "childfile", "childfolder", "descendant",
             "descendantfile", "descendantfolder", "parent", "fullpath",
             "location", "loc", "root", "volume", "volumelabel", "content",
+            "tag", "label", "comment",
             "name", "stem", "kind", "type", "exists", "fileexists", "folderexists",
             "dupe", "dupemin", "dupemax", "distinct", "distinctsort",
             "count", "sort", "audio", "doc", "document", "exe", "executable",
@@ -672,6 +673,8 @@ public enum QueryParser {
             case "location", "loc": return .parentPath
             case "root", "volume", "volumelabel": return .root
             case "content": return .content
+            case "tag", "label": return .tag
+            case "comment": return .comment
             default: return nil
             }
         }

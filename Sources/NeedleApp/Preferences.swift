@@ -80,6 +80,9 @@ final class Preferences: ObservableObject {
     @Published var theme: AppTheme {
         didSet { defaults.set(theme.rawValue, forKey: Keys.theme) }
     }
+    @Published var viewMode: ResultViewMode {
+        didSet { defaults.set(viewMode.rawValue, forKey: Keys.viewMode) }
+    }
     @Published var visibleColumns: Set<String> {
         didSet { defaults.set(Array(visibleColumns).sorted(), forKey: Keys.visibleColumns) }
     }
@@ -100,6 +103,7 @@ final class Preferences: ObservableObject {
         regexEnabled = defaults.bool(forKey: Keys.regexEnabled)
         resultLimit = defaults.object(forKey: Keys.resultLimit) as? Int ?? 3_000
         theme = AppTheme(rawValue: defaults.string(forKey: Keys.theme) ?? "") ?? .system
+        viewMode = ResultViewMode(rawValue: defaults.string(forKey: Keys.viewMode) ?? "") ?? .list
         let columns = defaults.stringArray(forKey: Keys.visibleColumns) ?? []
         visibleColumns = columns.isEmpty ? Set(SortField.allCases.map(\.rawValue)) : Set(columns)
     }
@@ -177,6 +181,7 @@ final class Preferences: ObservableObject {
         static let regexEnabled = "needle.regexEnabled"
         static let resultLimit = "needle.resultLimit"
         static let theme = "needle.theme"
+        static let viewMode = "needle.resultViewMode"
         static let visibleColumns = "needle.visibleColumns"
     }
 }

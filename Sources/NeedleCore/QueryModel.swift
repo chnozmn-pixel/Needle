@@ -10,6 +10,8 @@ public enum QueryField: String, Sendable, Equatable {
     case parentPath
     case root
     case content
+    case tag
+    case comment
 }
 
 public enum TextMode: String, Sendable, Equatable {
@@ -245,6 +247,22 @@ public struct ParsedQuery: Sendable, Equatable {
         return result
     }
 
+    public var tagTerms: [String] {
+        var result: [String] = []
+        collectText(expression, fields: [.tag], negated: false) { term, isNegated in
+            if !isNegated && term.mode == .contains && !term.text.isEmpty { result.append(term.text) }
+        }
+        return result
+    }
+
+    public var commentTerms: [String] {
+        var result: [String] = []
+        collectText(expression, fields: [.comment], negated: false) { term, isNegated in
+            if !isNegated && term.mode == .contains && !term.text.isEmpty { result.append(term.text) }
+        }
+        return result
+    }
+
     public var includeFiles: Bool {
         switch expression {
         case .type(let files, _): return files
@@ -298,6 +316,8 @@ public struct ParsedQuery: Sendable, Equatable {
             parts.append(L("ext hariç: %@", deniedExtensions.sorted().joined(separator: ", ")))
         }
         if !pathTerms.isEmpty { parts.append(L("yol: %@", pathTerms.joined(separator: " "))) }
+        if !tagTerms.isEmpty { parts.append(L("etiket: %@", tagTerms.joined(separator: " "))) }
+        if !commentTerms.isEmpty { parts.append(L("yorum: %@", commentTerms.joined(separator: " "))) }
         if minSize != nil || maxSize != nil { parts.append(L("boyut")) }
         if modifiedAfter != nil || modifiedBefore != nil { parts.append(L("değişiklik tarihi")) }
         if createdAfter != nil || createdBefore != nil { parts.append(L("oluşturma tarihi")) }

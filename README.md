@@ -31,13 +31,26 @@ Windows machine, or any cloud service. Results update as you type.
   from Needle's own index or that live on network volumes.
 - **Everything-style query language.** `|`, `!`, groups, quoted phrases,
   wildcards, `ext:`, `path:`, `parent:`, `root:`, `file`, `folder`, `size:`,
-  date filters, `content:`, `child:`, `empty:`, `dupe:`, `distinct:`, `count:`,
-  `sort:`, the macros `audio:`, `image:`, `video:` and `zip:`, and character
-  entities.
+  date filters, `content:`, `tag:`, `comment:`, `child:`, `empty:`, `dupe:`,
+  `distinct:`, `count:`, `sort:`, the macros `audio:`, `image:`, `video:` and
+  `zip:`, and character entities. `content:` also reads PDF text layers and
+  recognizes text in common image formats with OCR.
+- **EFU file lists.** Import voidtools-compatible `.efu` lists to index offline
+  media, backups, or shares that are not currently mounted. Lists live in the
+  index database and survive rescans. Results can be exported as EFU, CSV, or
+  text.
+- **Finder metadata.** Finder tags and comments are indexed for `tag:` and
+  `comment:` searches, and can be edited in the Properties window.
+- **Index journal.** Incremental changes, file-list imports and root changes are
+  recorded in a bounded journal available from Settings and the app menu.
+- **Thumbnail grid.** Switch between the detailed list and a Quick Look
+  thumbnail grid without losing your selection or search state.
+- **Per-root settings.** Each root can be disabled independently and can have
+  its own additional exclusion paths.
 - **Workflow features.** Saved searches, search and run history, advanced
-  search, a properties panel, CSV and plain-text export, configurable columns,
-  themes, Quick Look, Finder actions, a global hotkey, and an HTTP/JSON search
-  server that is disabled by default.
+  search, a properties panel, configurable columns, themes, Quick Look, Finder
+  actions, a global hotkey, and an HTTP/JSON search server that is disabled by
+  default.
 - **Privacy.** Indexing and searching happen entirely on your Mac. The HTTP
   server binds only to `127.0.0.1` and has to be turned on explicitly.
 
@@ -147,7 +160,9 @@ Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
 | `path:projects` | Match anywhere in the full path |
 | `file size:>10mb` | Files larger than 10 MB |
 | `dm:today` | Modified today |
-| `content:needle` | Search inside file contents |
+| `content:needle` | Search file contents (PDF text and image OCR) |
+| `tag:Important` | Finder tag |
+| `comment:draft` | Finder comment |
 | `dupe:size;content` | Duplicate files |
 | `distinct:name` | Unique results only |
 
@@ -159,7 +174,7 @@ app under **Settings → Syntax**.
 | Component | Responsibility |
 | --- | --- |
 | `FileSystem.scan` | Walks the selected roots with POSIX `opendir`/`readdir`/`lstat`, batches the metadata, and writes it to SQLite. |
-| `IndexDatabase` | Persistent SQLite database in WAL mode, with incremental inserts, updates, and deletes. |
+| `IndexDatabase` | Persistent SQLite database in WAL mode, with incremental inserts, updates and deletes, EFU lists, root settings and the journal. |
 | `SearchEngine` | In-memory snapshot with reversed 1-, 2-, and 3-byte n-gram posting lists; verifies real substring matches after intersecting candidates. |
 | `FSEventsWatcher` | Live change stream for local volumes; only the affected records are updated. |
 | `SpotlightSearch` | Optional `mdfind` lookups for missing entries and network volumes. |
@@ -174,13 +189,14 @@ inodes, so they stay stable across network shares.
 
 Implemented: the persistent index, live search, FSEvents monitoring, scheduled
 network roots, Spotlight enrichment, Everything-style query parsing, content and
-duplicate search, sorting, export, the HTTP/JSON endpoint, localization, and the
-interface features listed above.
+duplicate search, EFU file-list import/export, Finder tag/comment search and
+editing, the index journal, thumbnail grid, per-root settings, sorting, export,
+the HTTP/JSON endpoint, localization, and the interface features listed above.
+PDF text extraction and image OCR are available through `content:`.
 
-Not implemented yet: the ETP binary protocol, full file-list import/export
-parity, index journal and property parity, advanced index-location settings, and
-the remaining details of custom sorting and configuration. Contributions are
-welcome.
+Not implemented yet: the ETP binary protocol, full Everything property parity,
+advanced index-location settings, and the remaining details of custom sorting
+and configuration. Contributions are welcome.
 
 ## Tests
 
@@ -189,8 +205,9 @@ swift test
 ```
 
 The suite covers query parsing, n-gram search, incremental index updates,
-advanced queries, network scheduling state, the HTTP endpoints, and the
-localization fallback and audit checks.
+advanced queries, the EFU codec and import path, journal and root-setting
+persistence, tag/comment search, network scheduling state, the HTTP endpoints,
+and the localization fallback and audit checks.
 
 ## Project layout
 
@@ -250,13 +267,26 @@ herhangi bir bulut servisine ihtiyaç duymaz. Sonuçlar siz yazarken güncelleni
   ağ birimlerinde duran dosyalar `mdfind` ile tamamlanabilir.
 - **Everything tarzı sorgu dili.** `|`, `!`, gruplar, tırnaklı ifadeler, joker
   karakterler, `ext:`, `path:`, `parent:`, `root:`, `file`, `folder`, `size:`,
-  tarih filtreleri, `content:`, `child:`, `empty:`, `dupe:`, `distinct:`,
-  `count:`, `sort:`, `audio:`, `image:`, `video:` ve `zip:` makroları ve karakter
-  kısaltmaları.
+  tarih filtreleri, `content:`, `tag:`, `comment:`, `child:`, `empty:`, `dupe:`,
+  `distinct:`, `count:`, `sort:`, `audio:`, `image:`, `video:` ve `zip:`
+  makroları ve karakter kısaltmaları. `content:` PDF metin katmanlarını okur,
+  yaygın görsel biçimlerde OCR uygular.
+- **EFU dosya listeleri.** voidtools uyumlu `.efu` listelerini içe aktararak
+  çevrimdışı medyayı, yedekleri veya bağlı olmayan paylaşımları indekse
+  ekleyebilirsiniz. Listeler veritabanında saklanır ve yeniden taramada korunur.
+  Sonuçlar EFU, CSV veya metin olarak dışa aktarılabilir.
+- **Finder metadata.** Finder etiketleri ve yorumları indekslenir; `tag:` ve
+  `comment:` ile aranır, Özellikler penceresinden düzenlenir.
+- **İndeks günlüğü.** Artımlı değişiklikler, dosya listesi içe aktarımları ve kök
+  işlemleri sınırlı bir günlüğe yazılır; Ayarlar'dan ve uygulama menüsünden
+  görüntülenir.
+- **Küçük resim ızgarası.** Ayrıntılı liste ile Quick Look küçük resim ızgarası
+  arasında, seçiminizi ve arama durumunuzu koruyarak geçiş yapabilirsiniz.
+- **Kök başına ayarlar.** Her kök bağımsız olarak devre dışı bırakılabilir ve
+  yalnızca o köke özel dışlama yolları eklenebilir.
 - **İş akışı özellikleri.** Kayıtlı aramalar, arama ve çalıştırma geçmişi,
-  gelişmiş arama, özellikler paneli, CSV ve düz metin olarak dışa aktarma,
-  ayarlanabilir sütunlar, temalar, Quick Look, Finder işlemleri, genel kısayol
-  tuşu ve varsayılan olarak kapalı gelen HTTP/JSON arama sunucusu.
+  gelişmiş arama, ayarlanabilir sütunlar, temalar, Quick Look, Finder işlemleri,
+  genel kısayol tuşu ve varsayılan olarak kapalı gelen HTTP/JSON arama sunucusu.
 - **Gizlilik.** İndeksleme ve arama tamamen sizin Mac'inizde yapılır. HTTP
   sunucusu yalnızca `127.0.0.1` adresine bağlanır ve elle açılması gerekir.
 
@@ -368,7 +398,9 @@ kopyalayın.
 | `path:projects` | Tam yolun herhangi bir yerinde eşleşme |
 | `file size:>10mb` | 10 MB'tan büyük dosyalar |
 | `dm:today` | Bugün değiştirilenler |
-| `content:needle` | Dosya içeriğinde arama |
+| `content:needle` | Dosya içeriğinde arama (PDF metni ve görsel OCR) |
+| `tag:Önemli` | Finder etiketi |
+| `comment:taslak` | Finder yorumu |
 | `dupe:size;content` | Yinelenen dosyalar |
 | `distinct:name` | Yalnızca tekil sonuçlar |
 
@@ -380,7 +412,7 @@ Boşluk VE, `|` VEYA, `!` ise DEĞİL anlamına gelir. Tam liste uygulama içind
 | Bileşen | Görevi |
 | --- | --- |
 | `FileSystem.scan` | Seçilen kökleri POSIX `opendir`/`readdir`/`lstat` ile dolaşır, üst verileri toplu hâlde alır ve SQLite'a yazar. |
-| `IndexDatabase` | WAL modunda çalışan kalıcı SQLite veritabanı; artımlı ekleme, güncelleme ve silme işlemleri. |
+| `IndexDatabase` | WAL modunda çalışan kalıcı SQLite veritabanı; artımlı ekleme, güncelleme ve silme, EFU listeleri, kök ayarları ve günlük. |
 | `SearchEngine` | Bellek içi anlık görüntü; ters çevrilmiş 1, 2 ve 3 baytlık n-gram listeleri ile aday kümesini daraltır, ardından gerçek eşleşmeyi doğrular. |
 | `FSEventsWatcher` | Yerel diskler için canlı değişiklik akışı; yalnızca etkilenen kayıtlar güncellenir. |
 | `SpotlightSearch` | Eksik kayıtlar ve ağ birimleri için isteğe bağlı `mdfind` sorguları. |
@@ -395,13 +427,14 @@ Kayıt kimlikleri inode yerine, normalleştirilmiş tam yolun 64 bitlik FNV-1a
 
 Hazır olanlar: kalıcı indeks, canlı arama, FSEvents izleme, zamanlamalı ağ
 kökleri, Spotlight desteği, Everything tarzı sorgu ayrıştırma, içerik ve
-yinelenen dosya araması, sıralama, dışa aktarma, HTTP/JSON uç noktası,
-yerelleştirme ve yukarıda sayılan arayüz özellikleri.
+yinelenen dosya araması, EFU dosya listesi içe/dışa aktarma, Finder etiketi ve
+yorumu arama/düzenleme, indeks günlüğü, küçük resim ızgarası, kök başına
+ayarlar, sıralama, dışa aktarma, HTTP/JSON uç noktası, yerelleştirme ve yukarıda
+sayılan arayüz özellikleri. `content:` PDF metin çıkarımı ve görsel OCR kullanır.
 
-Henüz olmayanlar: ETP ikili protokolü, dosya listesi içe/dışa aktarmada tam
-uyumluluk, indeks günlüğü ve özellik uyumluluğu, gelişmiş indeks konumu ayarları
-ve özel sıralama ile yapılandırmanın kalan ayrıntıları. Katkılar memnuniyetle
-karşılanır.
+Henüz olmayanlar: ETP ikili protokolü, Everything özellik uyumluluğunun tamamı,
+gelişmiş indeks konumu ayarları ve özel sıralama ile yapılandırmanın kalan
+ayrıntıları. Katkılar memnuniyetle karşılanır.
 
 ## Testler
 
@@ -410,8 +443,9 @@ swift test
 ```
 
 Testler sorgu ayrıştırmayı, n-gram aramayı, artımlı indeks güncellemelerini,
-gelişmiş sorguları, ağ zamanlaması durumunu, HTTP uç noktalarını ve
-yerelleştirme denetimlerini kapsar.
+gelişmiş sorguları, EFU kodlama/içe aktarmayı, günlük ve kök ayarı
+kalıcılığını, etiket/yorum aramasını, ağ zamanlaması durumunu, HTTP uç
+noktalarını ve yerelleştirme denetimlerini kapsar.
 
 ## Proje yapısı
 
