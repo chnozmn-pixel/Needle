@@ -86,6 +86,9 @@ final class Preferences: ObservableObject {
     @Published var visibleColumns: Set<String> {
         didSet { defaults.set(Array(visibleColumns).sorted(), forKey: Keys.visibleColumns) }
     }
+    @Published var requireAuthForSettings: Bool {
+        didSet { defaults.set(requireAuthForSettings, forKey: Keys.requireAuthForSettings) }
+    }
 
     private let defaults: UserDefaults
 
@@ -106,6 +109,7 @@ final class Preferences: ObservableObject {
         viewMode = ResultViewMode(rawValue: defaults.string(forKey: Keys.viewMode) ?? "") ?? .list
         let columns = defaults.stringArray(forKey: Keys.visibleColumns) ?? []
         visibleColumns = columns.isEmpty ? Set(SortField.allCases.map(\.rawValue)) : Set(columns)
+        requireAuthForSettings = defaults.object(forKey: Keys.requireAuthForSettings) as? Bool ?? false
     }
 
     func rememberSearch(_ text: String) {
@@ -183,5 +187,6 @@ final class Preferences: ObservableObject {
         static let theme = "needle.theme"
         static let viewMode = "needle.resultViewMode"
         static let visibleColumns = "needle.visibleColumns"
+        static let requireAuthForSettings = "needle.requireAuthForSettings"
     }
 }

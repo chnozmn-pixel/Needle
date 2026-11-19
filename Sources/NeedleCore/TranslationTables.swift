@@ -310,6 +310,15 @@ public enum TranslationTables {
         "Giriş öğesi ayarlanamadı: %@": "Could not configure the login item: %@",
         "Kayıt için uygulamanın imzalı olması gerekir; macOS ayrıca onay isteyebilir.": "The app must be code signed for registration; macOS may also ask for approval.",
         "Açılış Öğelerini Aç": "Open Login Items",
+        "Güvenlik": "Security",
+        "Ayarları kimlik doğrulama ile koru": "Protect settings with authentication",
+        "Açıldığında Touch ID veya parola istenir.": "Touch ID or your password is required when opening.",
+        "Ayarlar kilitli": "Settings locked",
+        "Ayarları görüntülemek için Touch ID veya parolanızı kullanın.": "Use Touch ID or your password to view settings.",
+        "Kilidi Aç": "Unlock",
+        "Bu cihazda kimlik doğrulama kullanılamıyor.": "Authentication is not available on this Mac.",
+        "Needle ayarlarını açmak için kimlik doğrulayın.": "Authenticate to open Needle settings.",
+        "Kimlik doğrulama başarısız.": "Authentication failed.",
     ]
 
     /// Partial translations for widely used languages. Anything missing falls

@@ -6,11 +6,14 @@ import Glibc
 #endif
 
 /// Minimal loopback-only implementation of voidtools Everything's ETP control
-/// plane (plain-text FTP commands on a single TCP connection).
+/// plane (plain-text FTP commands on a single TCP connection) plus a read-only
+/// passive-mode data channel.
 ///
-/// There is deliberately no data channel, no TLS and no file transfer: `SIZE`,
-/// `MDTM` and `MLST` are answered from the search handler, and transfer-related
-/// commands are rejected with 500/502. Everything is bound to 127.0.0.1.
+/// `SIZE`, `MDTM` and `MLST` are answered from the search handler. `PASV` and
+/// `EPSV` open a loopback-only listening socket; `LIST`, `MLSD` and `RETR`
+/// accept one connection on it and stream index metadata or indexed file bytes.
+/// Active mode (`PORT`/`EPRT`) remains unsupported. Everything is bound to
+/// 127.0.0.1.
 ///
 /// Column defaults follow Everything's opt-in style: `PATH` is emitted by
 /// default because it identifies the result; size, dates and attributes are
@@ -31,6 +34,8 @@ public final class SearchETPServer: @unchecked Sendable {
         var sizeColumn = false
         var modifiedColumn = false
         var createdColumn = false
+        /// Listening socket created by PASV/EPSV, consumed by the next transfer.
+        var dataFD: Int32 = -1
     }
 
     private enum FileInfoKind: Sendable {
@@ -47,12 +52,16 @@ public final class SearchETPServer: @unchecked Sendable {
     private var listenFD: Int32 = -1
     private var source: DispatchSourceRead?
     private var clientSockets: Set<Int32> = []
+    private var dataSockets: Set<Int32> = []
     private var running = false
     private var boundPort: UInt16 = 0
 
     private static let maxLineBytes = 64 * 1_024
     private static let maxRequested = 1_000_000
     private static let maxUserValue = 100_000
+    private static let maxListEntries = 10_000
+    private static let dataAcceptTimeoutMs: Int32 = 3_000
+    private static let fileChunkBytes = 64 * 1_024
 
     /// The OS-assigned port when started with port 0; otherwise the chosen port.
     public var listeningPort: UInt16 {
@@ -142,12 +151,96 @@ public final class SearchETPServer: @unchecked Sendable {
         running = false
         let clients = clientSockets
         clientSockets.removeAll()
+        let dataFDs = dataSockets
+        dataSockets.removeAll()
         let currentSource = source
         source = nil
         lock.unlock()
 
         currentSource?.cancel()
         for fd in clients { close(fd) }
+        for fd in dataFDs { close(fd) }
+    }
+
+    // MARK: - Data socket lifecycle
+
+    /// Creates a fresh loopback-only listening socket with an OS-assigned port.
+    private func makeDataSocket() -> (fd: Int32, port: UInt16)? {
+        let fd = socket(AF_INET, Int32(SOCK_STREAM), 0)
+        guard fd >= 0 else { return nil }
+
+        var reuse: Int32 = 1
+        _ = withUnsafePointer(to: &reuse) {
+            setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, $0, socklen_t(MemoryLayout<Int32>.size))
+        }
+
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = 0 // Let the OS choose an ephemeral port.
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+
+        let bound = withUnsafeMutablePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bound == 0, listen(fd, 1) == 0 else {
+            close(fd)
+            return nil
+        }
+
+        var actual = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &actual) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(fd, $0, &length)
+            }
+        }
+        let port = UInt16(bigEndian: actual.sin_port)
+        guard port > 0 else {
+            close(fd)
+            return nil
+        }
+
+        lock.lock()
+        dataSockets.insert(fd)
+        lock.unlock()
+        return (fd, port)
+    }
+
+    /// Closes a data socket exactly once, even if `stop()` races with a client.
+    private func closeDataFD(_ fd: Int32) {
+        guard fd >= 0 else { return }
+        lock.lock()
+        let owned = dataSockets.remove(fd) != nil
+        lock.unlock()
+        if owned { close(fd) }
+    }
+
+    /// Waits for a single data connection with a bounded deadline and verifies
+    /// the peer is loopback before handing it to the transfer code.
+    private func acceptDataConnection(_ listenFD: Int32) -> Int32? {
+        guard isRunning else { return nil }
+        var descriptor = pollfd(fd: listenFD, events: Int16(POLLIN), revents: 0)
+        let ready = poll(&descriptor, 1, Self.dataAcceptTimeoutMs)
+        guard ready > 0, (descriptor.revents & Int16(POLLIN)) != 0, isRunning else { return nil }
+
+        let peerFD = accept(listenFD, nil, nil)
+        guard peerFD >= 0 else { return nil }
+
+        var peer = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let resolved = withUnsafeMutablePointer(to: &peer) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getpeername(peerFD, $0, &length)
+            }
+        }
+        guard resolved == 0, peer.sin_family == sa_family_t(AF_INET),
+              peer.sin_addr.s_addr == inet_addr("127.0.0.1") else {
+            close(peerFD)
+            return nil
+        }
+        return peerFD
     }
 
     // MARK: - Accept / client loop
@@ -177,6 +270,8 @@ public final class SearchETPServer: @unchecked Sendable {
 
     private func handle(_ client: Int32) {
         var session = Session()
+        // Covers QUIT, remote disconnect and a concurrent stop() closing clients.
+        defer { closeDataFD(session.dataFD) }
         write(client, Self.lines("220 Welcome to Needle ETP"))
 
         var pending = Data()
@@ -208,9 +303,9 @@ public final class SearchETPServer: @unchecked Sendable {
 
     private func closeClient(_ fd: Int32) {
         lock.lock()
-        clientSockets.remove(fd)
+        let owned = clientSockets.remove(fd) != nil
         lock.unlock()
-        close(fd)
+        if owned { close(fd) }
     }
 
     private static func popLine(_ buffer: inout Data) -> String? {
@@ -232,19 +327,25 @@ public final class SearchETPServer: @unchecked Sendable {
         semaphore.wait()
     }
 
-    private func write(_ fd: Int32, _ data: Data) {
-        data.withUnsafeBytes { raw in
-            guard let base = raw.baseAddress else { return }
+    @discardableResult
+    private func sendAll(_ fd: Int32, _ data: Data) -> Bool {
+        data.withUnsafeBytes { raw -> Bool in
+            guard let base = raw.baseAddress else { return false }
             var offset = 0
             while offset < raw.count {
                 let written = send(fd, base.advanced(by: offset), raw.count - offset, 0)
                 if written <= 0 {
                     if errno == EINTR { continue }
-                    return
+                    return false
                 }
                 offset += written
             }
+            return true
         }
+    }
+
+    private func write(_ fd: Int32, _ data: Data) {
+        _ = sendAll(fd, data)
     }
 
     // MARK: - Command dispatch
@@ -301,6 +402,8 @@ public final class SearchETPServer: @unchecked Sendable {
         case "NOOP":
             write(client, Self.lines("200 NOOP ok."))
         case "QUIT":
+            closeDataFD(session.dataFD)
+            session.dataFD = -1
             write(client, Self.lines("221 Goodbye."))
             return false
         case "SITE":
@@ -324,7 +427,38 @@ public final class SearchETPServer: @unchecked Sendable {
             runAsync { [weak self] in await self?.answerFileInfo(.mdtm, path: argument, client: client) }
         case "MLST":
             runAsync { [weak self] in await self?.answerFileInfo(.mlst, path: argument, client: client) }
-        case "PASV", "EPSV", "PORT", "EPRT", "LIST", "MLSD", "RETR", "STOR":
+        case "PASV", "EPSV":
+            // Repeating PASV/EPSV replaces any pending data socket.
+            closeDataFD(session.dataFD)
+            session.dataFD = -1
+            if let socket = makeDataSocket() {
+                session.dataFD = socket.fd
+                if command == "PASV" {
+                    let p1 = socket.port >> 8
+                    let p2 = socket.port & 0xFF
+                    write(client, Self.lines("227 Entering Passive Mode (127,0,0,1,\(p1),\(p2))."))
+                } else {
+                    write(client, Self.lines("229 Entering Extended Passive Mode (|||\(socket.port)|)."))
+                }
+            } else {
+                write(client, Self.lines("425 Can't open data connection."))
+            }
+        case "LIST", "MLSD":
+            let dataFD = session.dataFD
+            let snapshot = session
+            runAsync { [weak self] in
+                await self?.answerListing(command, path: argument, client: client,
+                                          dataFD: dataFD, session: snapshot)
+            }
+            // The transfer consumes (and closes) the listening socket.
+            session.dataFD = -1
+        case "RETR":
+            let dataFD = session.dataFD
+            runAsync { [weak self] in
+                await self?.answerRetrieve(argument, client: client, dataFD: dataFD)
+            }
+            session.dataFD = -1
+        case "PORT", "EPRT", "STOR":
             write(client, Self.lines("502 Command not implemented."))
         default:
             write(client, Self.lines("500 Unknown command."))
@@ -423,12 +557,7 @@ public final class SearchETPServer: @unchecked Sendable {
             write(client, Self.lines("500 Syntax error."))
             return
         }
-        let name = (rawPath as NSString).lastPathComponent
-        let results = await handler(name, 1_000)
-        let target = Self.adaptPath(rawPath)
-        let match = results.first { Self.adaptPath($0.entry.path) == target }
-            ?? results.first { Self.adaptPath($0.entry.path).caseInsensitiveCompare(target) == .orderedSame }
-        guard let entry = match?.entry else {
+        guard let entry = await resolvePath(rawPath) else {
             write(client, Self.lines("550 File not found."))
             return
         }
@@ -447,6 +576,138 @@ public final class SearchETPServer: @unchecked Sendable {
                 "250 End."
             ]))
         }
+    }
+
+    /// Shared exact-index-match logic for SIZE/MDTM/MLST/LIST/MLSD/RETR.
+    private func resolvePath(_ rawPath: String) async -> IndexEntry? {
+        guard !rawPath.isEmpty else { return nil }
+        let name = (rawPath as NSString).lastPathComponent
+        let results = await handler(name, 1_000)
+        let target = Self.adaptPath(rawPath)
+        let match = results.first { Self.adaptPath($0.entry.path) == target }
+            ?? results.first { Self.adaptPath($0.entry.path).caseInsensitiveCompare(target) == .orderedSame }
+        return match?.entry
+    }
+
+    // MARK: - Passive data transfers
+
+    private func answerListing(_ command: String, path: String, client: Int32,
+                               dataFD: Int32, session: Session) async {
+        guard dataFD >= 0 else {
+            write(client, Self.lines("425 Use PASV or EPSV first."))
+            return
+        }
+
+        let entries: [IndexEntry]
+        if path.isEmpty {
+            let upperBound = min(Self.maxRequested, max(10_000, session.count + session.offset))
+            let results = await handler(session.query, upperBound)
+            entries = Array(results.dropFirst(session.offset)
+                .prefix(min(session.count, Self.maxListEntries)).map(\.entry))
+        } else {
+            guard let directory = await resolvePath(path), directory.isDirectory else {
+                closeDataFD(dataFD)
+                write(client, Self.lines("550 File not found."))
+                return
+            }
+            let target = Self.normalizedDirectoryPath(directory.path)
+            let results = await handler(path, Self.maxListEntries)
+            entries = Array(results.lazy
+                .filter { Self.parentPath($0.entry.path) == target }
+                .prefix(Self.maxListEntries)
+                .map(\.entry))
+        }
+
+        let rows = entries.map { entry in
+            command == "MLSD" ? Self.mlsdLine(entry) : Self.listLine(entry)
+        }
+        guard let dataClient = startTransfer(dataFD: dataFD, client: client) else { return }
+        if !rows.isEmpty {
+            _ = sendAll(dataClient, Self.lines(rows))
+        }
+        finishTransfer(dataClient, dataFD: dataFD, client: client)
+    }
+
+    private func answerRetrieve(_ rawPath: String, client: Int32, dataFD: Int32) async {
+        guard dataFD >= 0 else {
+            write(client, Self.lines("425 Use PASV or EPSV first."))
+            return
+        }
+        guard let entry = await resolvePath(rawPath), !entry.isDirectory else {
+            closeDataFD(dataFD)
+            write(client, Self.lines("550 File not found."))
+            return
+        }
+        // Only the exact indexed path may ever be opened.
+        let filePath = entry.path
+        guard FileManager.default.fileExists(atPath: filePath) else {
+            closeDataFD(dataFD)
+            write(client, Self.lines("550 File not found."))
+            return
+        }
+        guard let dataClient = startTransfer(dataFD: dataFD, client: client) else { return }
+
+        var succeeded = false
+        if let handle = FileHandle(forReadingAtPath: filePath) {
+            succeeded = true
+            while succeeded {
+                let chunk = handle.readData(ofLength: Self.fileChunkBytes)
+                if chunk.isEmpty { break }
+                succeeded = sendAll(dataClient, chunk)
+            }
+            try? handle.close()
+        }
+        finishTransfer(dataClient, dataFD: dataFD, client: client, succeeded: succeeded)
+    }
+
+    /// Sends the 150 reply and accepts the single data connection.
+    private func startTransfer(dataFD: Int32, client: Int32) -> Int32? {
+        write(client, Self.lines("150 Opening data connection."))
+        guard let dataClient = acceptDataConnection(dataFD) else {
+            closeDataFD(dataFD)
+            write(client, Self.lines("425 Can't open data connection."))
+            return nil
+        }
+        return dataClient
+    }
+
+    private func finishTransfer(_ dataClient: Int32, dataFD: Int32, client: Int32,
+                                succeeded: Bool = true) {
+        close(dataClient)
+        closeDataFD(dataFD)
+        write(client, Self.lines(succeeded ? "226 Transfer complete." : "550 Transfer failed."))
+    }
+
+    private static func normalizedDirectoryPath(_ path: String) -> String {
+        var result = path
+        while result.count > 1, result.hasSuffix("/") { result.removeLast() }
+        return result
+    }
+
+    private static func parentPath(_ path: String) -> String {
+        let parent = (path as NSString).deletingLastPathComponent
+        return parent.isEmpty ? "/" : parent
+    }
+
+    private static func listLine(_ entry: IndexEntry) -> String {
+        let kind = entry.isDirectory ? "d" : "-"
+        let mode = entry.isDirectory ? "rwxr-xr-x" : "rw-r--r--"
+        let size = entry.isDirectory ? 0 : entry.size
+        return "\(kind)\(mode) 1 owner staff \(size) \(listDate(entry.modifiedAt)) \(entry.name)"
+    }
+
+    private static func mlsdLine(_ entry: IndexEntry) -> String {
+        let type = entry.isDirectory ? "dir" : "file"
+        let size = entry.isDirectory ? 0 : entry.size
+        return "type=\(type);size=\(size);modify=\(utcString(entry.modifiedAt)); \(entry.name)"
+    }
+
+    private static func listDate(_ date: Date?) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "MMM dd HH:mm"
+        return formatter.string(from: date ?? Date(timeIntervalSince1970: 0))
     }
 
     /// Needle stores POSIX paths while Everything clients expect DOS-style

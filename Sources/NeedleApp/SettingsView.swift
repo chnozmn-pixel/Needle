@@ -9,9 +9,15 @@ struct SettingsView: View {
     @StateObject private var loginItems = LoginItemManager()
     @State private var httpPortText = "8080"
     @State private var etpPortText = "8081"
+    @State private var isSettingsUnlocked = false
+
+    private var needsUnlock: Bool {
+        preferences.requireAuthForSettings && !isSettingsUnlocked
+    }
 
     var body: some View {
-        TabView {
+        ZStack {
+            TabView {
             generalTab
                 .tabItem { Label(L("Genel"), systemImage: "gearshape") }
             rootsTab
@@ -26,8 +32,16 @@ struct SettingsView: View {
                 .tabItem { Label(L("Dosya Listeleri"), systemImage: "doc.text") }
             syntaxTab
                 .tabItem { Label(L("Sözdizimi"), systemImage: "questionmark.circle") }
+            }
+            .disabled(needsUnlock)
+
+            if needsUnlock {
+                SettingsLockView { isSettingsUnlocked = true }
+                    .background(.regularMaterial)
+            }
         }
         .frame(minWidth: 640, idealWidth: 720, minHeight: 520, idealHeight: 640)
+        .onDisappear { isSettingsUnlocked = false }
     }
 
     // MARK: - Roots
@@ -241,6 +255,13 @@ struct SettingsView: View {
                     Button(L("Açılış Öğelerini Aç")) { loginItems.openSystemSettings() }
                         .font(.caption)
                 }
+            }
+
+            Section(L("Güvenlik")) {
+                Toggle(L("Ayarları kimlik doğrulama ile koru"), isOn: $preferences.requireAuthForSettings)
+                Text(L("Açıldığında Touch ID veya parola istenir."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section(L("Görünüm")) {

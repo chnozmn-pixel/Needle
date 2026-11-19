@@ -56,10 +56,14 @@ Windows machine, or any cloud service. Results update as you type.
 - **Native macOS integration.** Drag folders onto the window to index them,
   drop an `.efu` list to import it, or drag results back to Finder for real file
   operations. Needle can also register as a login item from Settings.
-- **Optional ETP endpoint.** A minimal loopback ETP/FTP control plane accepts
+- **Optional settings lock.** Settings can be protected with Touch ID or the Mac
+  account password; the lock is off by default.
+- **Optional ETP endpoint.** A loopback ETP/FTP server accepts
   `SITE EVERYTHING SEARCH/COUNT/OFFSET/QUERY` and column commands on port 8081
-  by default, so Everything-compatible clients can query Needle. There is no
-  data channel, TLS, or file download.
+  by default, so Everything-compatible clients can query Needle. Passive-mode
+  `PASV`/`EPSV` plus `LIST`/`MLSD` and read-only `RETR` support FTP-style
+  browsing and downloads of indexed files. Active mode and TLS are not
+  supported.
 - **Privacy.** Indexing and searching happen entirely on your Mac. The HTTP and
   ETP servers bind only to `127.0.0.1` and have to be turned on explicitly.
 
@@ -80,7 +84,7 @@ The repository is <https://github.com/chnozmn-pixel/Needle>.
 ### 1. Release ZIP — recommended
 
 1. Open the repository's **Releases** page.
-2. Download `Needle-0.3.2.zip`.
+2. Download `Needle-0.4.0.zip`.
 3. Unzip it and move `Needle.app` into `/Applications`.
 4. Launch it. On first run it indexes your home folder.
 
@@ -139,7 +143,7 @@ development, not as a normal installation path.
 
 ```bash
 ./scripts/package-release.sh
-# prints dist/Needle-0.3.2.zip and its SHA-256
+# prints dist/Needle-0.4.0.zip and its SHA-256
 ```
 
 Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
@@ -203,9 +207,9 @@ editing, the index journal, thumbnail grid, per-root settings, sorting, export,
 the HTTP/JSON endpoint, localization, and the interface features listed above.
 PDF text extraction and image OCR are available through `content:`.
 
-Not implemented yet: ETP data-channel commands (FTP-style browsing and file
-transfer), TLS, full Everything property parity, advanced index-location
-settings, and the remaining details of custom sorting and configuration.
+Not implemented yet: ETP active-mode transfers and TLS, full Everything
+property parity, advanced index-location settings, and the remaining details of
+custom sorting and configuration.
 Contributions are welcome.
 
 ## Tests
@@ -304,10 +308,13 @@ herhangi bir bulut servisine ihtiyaç duymaz. Sonuçlar siz yazarken güncelleni
   ekleyebilir, `.efu` listesini bırakıp içe aktarabilir veya sonuçları Finder'a
   sürükleyerek gerçek dosya işlemleri yapabilirsiniz. Ayarlar'dan açılışta
   başlatma öğesi olarak da kaydedilebilir.
-- **İsteğe bağlı ETP uç noktası.** Minimal bir ETP/FTP kontrol düzlemi, varsayılan
-  olarak 8081 portunda `SITE EVERYTHING SEARCH/COUNT/OFFSET/QUERY` ve sütun
-  komutlarını kabul eder; Everything uyumlu istemciler Needle'ı sorgulayabilir.
-  Veri kanalı, TLS veya dosya indirme yoktur.
+- **İsteğe bağlı ayarlar kilidi.** Ayarlar Touch ID veya Mac hesap parolası ile
+  korunabilir; varsayılan olarak kapalıdır.
+- **İsteğe bağlı ETP uç noktası.** ETP/FTP sunucusu varsayılan olarak 8081
+  portunda `SITE EVERYTHING SEARCH/COUNT/OFFSET/QUERY` ve sütun komutlarını kabul
+  eder; Everything uyumlu istemciler Needle'ı sorgulayabilir. Pasif mod
+  (`PASV`/`EPSV`), `LIST`/`MLSD` ve salt okunur `RETR` ile FTP tarzı gezinme ve
+  indekslenmiş dosyaları indirme desteklenir. Aktif mod ve TLS yoktur.
 - **Gizlilik.** İndeksleme ve arama tamamen sizin Mac'inizde yapılır. HTTP ve ETP
   sunucuları yalnızca `127.0.0.1` adresine bağlanır ve elle açılması gerekir.
 
@@ -329,7 +336,7 @@ Proje deposu: <https://github.com/chnozmn-pixel/Needle>
 ### 1. Release ZIP — önerilen yol
 
 1. Deponun **Releases** sayfasını açın.
-2. `Needle-0.3.2.zip` dosyasını indirin.
+2. `Needle-0.4.0.zip` dosyasını indirin.
 3. ZIP'i açın ve `Needle.app` uygulamasını `/Applications` klasörüne taşıyın.
 4. Uygulamayı başlatın. İlk açılışta ev klasörünüz indekslenir.
 
@@ -388,7 +395,7 @@ Normal kurulum yolu değil, geliştirme içindir.
 
 ```bash
 ./scripts/package-release.sh
-# dist/Needle-0.3.2.zip yolunu ve SHA-256 değerini yazdırır
+# dist/Needle-0.4.0.zip yolunu ve SHA-256 değerini yazdırır
 ```
 
 Bu ZIP'i GitHub release'ine yükleyin ve SHA-256 değerini Cask dosyasına
@@ -453,10 +460,9 @@ yorumu arama/düzenleme, indeks günlüğü, küçük resim ızgarası, kök ba�
 ayarlar, sıralama, dışa aktarma, HTTP/JSON uç noktası, yerelleştirme ve yukarıda
 sayılan arayüz özellikleri. `content:` PDF metin çıkarımı ve görsel OCR kullanır.
 
-Henüz olmayanlar: ETP veri kanalı komutları (FTP tarzı gezinme ve dosya aktarımı),
-TLS, Everything özellik uyumluluğunun tamamı, gelişmiş indeks konumu ayarları ve
-özel sıralama ile yapılandırmanın kalan ayrıntıları. Katkılar memnuniyetle
-karşılanır.
+Henüz olmayanlar: ETP aktif mod aktarımları ve TLS, Everything özellik
+uyumluluğunun tamamı, gelişmiş indeks konumu ayarları ve özel sıralama ile
+yapılandırmanın kalan ayrıntıları. Katkılar memnuniyetle karşılanır.
 
 ## Testler
 
