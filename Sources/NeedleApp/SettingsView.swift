@@ -6,7 +6,9 @@ struct SettingsView: View {
     @EnvironmentObject private var coordinator: IndexCoordinator
     @EnvironmentObject private var preferences: Preferences
     @ObservedObject private var localization = LocalizationManager.shared
+    @StateObject private var loginItems = LoginItemManager()
     @State private var httpPortText = "8080"
+    @State private var etpPortText = "8081"
 
     var body: some View {
         TabView {
@@ -222,6 +224,23 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section(L("Başlangıç")) {
+                Toggle(L("Açılışta Needle'ı başlat"), isOn: Binding(
+                    get: { loginItems.isEnabled },
+                    set: { loginItems.setEnabled($0) }
+                ))
+                Text(L("Kayıt için uygulamanın imzalı olması gerekir; macOS ayrıca onay isteyebilir."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let error = loginItems.errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button(L("Açılış Öğelerini Aç")) { loginItems.openSystemSettings() }
+                        .font(.caption)
+                }
+            }
+
             Section(L("Görünüm")) {
                 Picker(L("Tema"), selection: $preferences.theme) {
                     ForEach(AppTheme.allCases) { theme in
@@ -291,6 +310,34 @@ struct SettingsView: View {
                     .textSelection(.enabled)
             }
 
+            Section(L("ETP Sunucusu")) {
+                Toggle(L("Yerel ETP (Everything ağ protokolü) sunucusunu etkinleştir"), isOn: Binding(
+                    get: { coordinator.etpServerEnabled },
+                    set: { enabled in
+                        Task { await coordinator.setETPServer(enabled: enabled, port: UInt16(etpPortText)) }
+                    }
+                ))
+                HStack {
+                    TextField(L("Port"), text: $etpPortText)
+                        .frame(width: 80)
+                        .onSubmit { applyETPPort() }
+                    Button(L("Uygula")) { applyETPPort() }
+                    Spacer()
+                    if coordinator.etpServerRunning {
+                        Label(L("Çalışıyor"), systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    } else {
+                        Label(L("Durdu"), systemImage: "xmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(L("Etkinleştirildiğinde 127.0.0.1:%@ adresinde düz metin ETP/FTP komutları dinlenir; veri kanalı ve dosya indirme yoktur.", etpPortText))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section(L("İndeksleme")) {
                 Toggle(L("Paket (.app, .bundle) içeriklerini atla"), isOn: Binding(
                     get: { coordinator.skipPackageContents },
@@ -323,7 +370,10 @@ struct SettingsView: View {
             }
         }
         .padding(20)
-        .onAppear { httpPortText = String(coordinator.httpServerPort) }
+        .onAppear {
+            httpPortText = String(coordinator.httpServerPort)
+            etpPortText = String(coordinator.etpServerPort)
+        }
     }
 
     // MARK: - Search defaults
@@ -555,6 +605,14 @@ struct SettingsView: View {
             return
         }
         Task { await coordinator.setHTTPServer(enabled: coordinator.httpServerEnabled, port: port) }
+    }
+
+    private func applyETPPort() {
+        guard let port = UInt16(etpPortText), port > 0 else {
+            etpPortText = String(coordinator.etpServerPort)
+            return
+        }
+        Task { await coordinator.setETPServer(enabled: coordinator.etpServerEnabled, port: port) }
     }
 
     private func addFolders() {

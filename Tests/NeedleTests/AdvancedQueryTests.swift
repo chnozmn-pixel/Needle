@@ -107,6 +107,47 @@ final class AdvancedQueryTests: XCTestCase {
         XCTAssertEqual(engine.search(query).count, 1)
     }
 
+    func testSingleSortSpecification() {
+        let engine = SearchEngine()
+        engine.rebuild(from: [
+            entry("/p/b.txt", size: 10),
+            entry("/p/a.txt", size: 30),
+            entry("/p/c.txt", size: 20)
+        ])
+        XCTAssertEqual(engine.search(QueryParser.parse("sort:size-descending")).map(\.entry.name),
+                       ["a.txt", "c.txt", "b.txt"])
+        XCTAssertEqual(engine.search(QueryParser.parse("sort:name")).map(\.entry.name),
+                       ["a.txt", "b.txt", "c.txt"])
+    }
+
+    func testMultipleSortSpecificationsApplyEveryLevel() {
+        let engine = SearchEngine()
+        engine.rebuild(from: [
+            entry("/p/b.jpg", size: 10),
+            entry("/p/a.jpg", size: 30),
+            entry("/p/d.txt", size: 5),
+            entry("/p/c.txt", size: 20)
+        ])
+        let query = QueryParser.parse("sort:ext;size-descending")
+        XCTAssertEqual(query.sortSpecifications.count, 2)
+        XCTAssertEqual(engine.search(query).map(\.entry.name),
+                       ["a.jpg", "b.jpg", "c.txt", "d.txt"])
+    }
+
+    func testThreeSortSpecificationsUseLaterOnesAsTieBreakers() {
+        let engine = SearchEngine()
+        engine.rebuild(from: [
+            entry("/p/b.jpg", size: 10),
+            entry("/p/a.jpg", size: 10),
+            entry("/p/c.jpg", size: 20),
+            entry("/p/z.txt", size: 10)
+        ])
+        let query = QueryParser.parse("sort:size-descending;ext;name")
+        XCTAssertEqual(query.sortSpecifications.count, 3)
+        XCTAssertEqual(engine.search(query).map(\.entry.name),
+                       ["c.jpg", "a.jpg", "b.jpg", "z.txt"])
+    }
+
     func testGlobalModifiersFromOptions() {
         let paths = ["/Users/me/RAPOR.txt", "/Users/me/rapor.txt", "/Users/me/raporlar.txt"]
         XCTAssertEqual(names(paths, "?case: RAPOR"), ["RAPOR.txt"])

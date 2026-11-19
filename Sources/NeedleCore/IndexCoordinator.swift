@@ -15,6 +15,9 @@ public final class IndexCoordinator: ObservableObject {
     @Published public var httpServerEnabled = false
     @Published public var httpServerPort: UInt16 = 8_080
     @Published public var httpServerRunning = false
+    @Published public var etpServerEnabled = false
+    @Published public var etpServerPort: UInt16 = 8_081
+    @Published public var etpServerRunning = false
     @Published public var networkScanConfiguration = NetworkScanConfiguration()
     @Published public var lastNetworkScanDate: Date?
     @Published public var errorMessage: String?
@@ -23,6 +26,10 @@ public final class IndexCoordinator: ObservableObject {
     private let store: IndexStore
     private let cancellation = CancellationFlag()
     private var httpServer: SearchHTTPServer?
+    private var etpServer: SearchETPServer?
+
+    private static let etpEnabledKey = "needle.etpEnabled"
+    private static let etpPortKey = "needle.etpPort"
 
     public init() {
         let support = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -45,6 +52,9 @@ public final class IndexCoordinator: ObservableObject {
         if httpServerEnabled && httpServer == nil {
             startHTTPServer(port: httpServerPort)
         }
+        if etpServerEnabled && etpServer == nil {
+            startETPServer(port: etpServerPort)
+        }
     }
 
     public func refresh() async {
@@ -57,6 +67,11 @@ public final class IndexCoordinator: ObservableObject {
         journalEntries = await store.recentJournal()
         httpServerEnabled = await store.isHTTPServerEnabled()
         httpServerPort = await store.httpServerPort()
+        let defaults = UserDefaults.standard
+        etpServerEnabled = defaults.bool(forKey: Self.etpEnabledKey)
+        let savedETPPort = defaults.integer(forKey: Self.etpPortKey)
+        etpServerPort = savedETPPort > 0 && savedETPPort <= Int(UInt16.max)
+            ? UInt16(savedETPPort) : 8_081
         networkScanConfiguration = await store.networkScanConfiguration()
         lastNetworkScanDate = await store.lastNetworkScanDate()
     }
@@ -204,6 +219,41 @@ public final class IndexCoordinator: ObservableObject {
         } catch {
             httpServer = nil
             httpServerRunning = false
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// ETP settings live in UserDefaults under `needle.*` keys; the HTTP server
+    /// uses database metadata. Both servers are independent and loopback-only.
+    public func setETPServer(enabled: Bool, port: UInt16? = nil) async {
+        let resolvedPort = port ?? etpServerPort
+        let defaults = UserDefaults.standard
+        defaults.set(enabled, forKey: Self.etpEnabledKey)
+        defaults.set(Int(resolvedPort), forKey: Self.etpPortKey)
+        etpServerEnabled = enabled
+        etpServerPort = resolvedPort
+        if enabled {
+            startETPServer(port: resolvedPort)
+        } else {
+            etpServer?.stop()
+            etpServer = nil
+            etpServerRunning = false
+        }
+    }
+
+    private func startETPServer(port: UInt16) {
+        etpServer?.stop()
+        let server = SearchETPServer(port: port) { [store] query, limit in
+            await store.search(QueryParser.parse(query), limit: limit)
+        }
+        do {
+            try server.start()
+            etpServer = server
+            etpServerRunning = true
+            errorMessage = nil
+        } catch {
+            etpServer = nil
+            etpServerRunning = false
             errorMessage = error.localizedDescription
         }
     }

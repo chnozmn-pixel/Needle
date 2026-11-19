@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import NeedleCore
 
 enum SortField: String, CaseIterable {
@@ -127,6 +128,16 @@ struct ResultTable: View {
         NSPasteboard.general.setString(items.map(\.entry.path).joined(separator: "\n"), forType: .string)
     }
 
+    /// Dragging a result to Finder provides the file URL(s) instead of a plain
+    /// path string, so Finder can perform real file operations.
+    private func dragProvider(for result: SearchResult) -> NSItemProvider {
+        let items = selectedResults.contains(where: { $0.id == result.id }) ? selectedResults : [result]
+        let urls = items.map(\.entry.url).filter {
+            FileManager.default.fileExists(atPath: $0.path)
+        } as NSArray
+        return NSItemProvider(item: urls, typeIdentifier: UTType.fileURL.identifier)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
@@ -160,6 +171,7 @@ struct ResultTable: View {
                         }
                     }
                     .onTapGesture(count: 2) { onOpen(result) }
+                    .onDrag { dragProvider(for: result) }
                 }
                 .width(columnWidth(.name))
 

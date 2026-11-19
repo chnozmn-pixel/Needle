@@ -50,13 +50,22 @@ Windows machine, or any cloud service. Results update as you type.
 - **Workflow features.** Saved searches, search and run history, advanced
   search, a properties panel, configurable columns, themes, Quick Look, Finder
   actions, a global hotkey, and an HTTP/JSON search server that is disabled by
-  default.
-- **Privacy.** Indexing and searching happen entirely on your Mac. The HTTP
-  server binds only to `127.0.0.1` and has to be turned on explicitly.
+  default. URLs such as `needle://search?q=report` open Needle and run a search,
+  so browser bookmarks and Shortcuts can hand off queries. A native App Shortcut,
+  “Search Needle”, is also registered for macOS Shortcuts and Siri.
+- **Native macOS integration.** Drag folders onto the window to index them,
+  drop an `.efu` list to import it, or drag results back to Finder for real file
+  operations. Needle can also register as a login item from Settings.
+- **Optional ETP endpoint.** A minimal loopback ETP/FTP control plane accepts
+  `SITE EVERYTHING SEARCH/COUNT/OFFSET/QUERY` and column commands on port 8081
+  by default, so Everything-compatible clients can query Needle. There is no
+  data channel, TLS, or file download.
+- **Privacy.** Indexing and searching happen entirely on your Mac. The HTTP and
+  ETP servers bind only to `127.0.0.1` and have to be turned on explicitly.
 
-Needle is inspired by Everything, but it is not binary-compatible with it. The
-ETP network protocol and a few advanced Everything features are not
-implemented — see [Scope](#scope) below.
+Needle is inspired by Everything, but it is not fully binary-compatible with it.
+The ETP endpoint implements the query control plane only; a few advanced
+Everything features are not implemented — see [Scope](#scope) below.
 
 ## Requirements
 
@@ -71,7 +80,7 @@ The repository is <https://github.com/chnozmn-pixel/Needle>.
 ### 1. Release ZIP — recommended
 
 1. Open the repository's **Releases** page.
-2. Download `Needle-0.2.0.zip`.
+2. Download `Needle-0.3.0.zip`.
 3. Unzip it and move `Needle.app` into `/Applications`.
 4. Launch it. On first run it indexes your home folder.
 
@@ -130,7 +139,7 @@ development, not as a normal installation path.
 
 ```bash
 ./scripts/package-release.sh
-# prints dist/Needle-0.2.0.zip and its SHA-256
+# prints dist/Needle-0.3.0.zip and its SHA-256
 ```
 
 Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
@@ -194,9 +203,10 @@ editing, the index journal, thumbnail grid, per-root settings, sorting, export,
 the HTTP/JSON endpoint, localization, and the interface features listed above.
 PDF text extraction and image OCR are available through `content:`.
 
-Not implemented yet: the ETP binary protocol, full Everything property parity,
-advanced index-location settings, and the remaining details of custom sorting
-and configuration. Contributions are welcome.
+Not implemented yet: ETP data-channel commands (FTP-style browsing and file
+transfer), TLS, full Everything property parity, advanced index-location
+settings, and the remaining details of custom sorting and configuration.
+Contributions are welcome.
 
 ## Tests
 
@@ -287,12 +297,23 @@ herhangi bir bulut servisine ihtiyaç duymaz. Sonuçlar siz yazarken güncelleni
 - **İş akışı özellikleri.** Kayıtlı aramalar, arama ve çalıştırma geçmişi,
   gelişmiş arama, ayarlanabilir sütunlar, temalar, Quick Look, Finder işlemleri,
   genel kısayol tuşu ve varsayılan olarak kapalı gelen HTTP/JSON arama sunucusu.
-- **Gizlilik.** İndeksleme ve arama tamamen sizin Mac'inizde yapılır. HTTP
-  sunucusu yalnızca `127.0.0.1` adresine bağlanır ve elle açılması gerekir.
+  `needle://search?q=rapor` gibi URL'ler Needle'ı açıp aramayı çalıştırır; tarayıcı
+  yer imleri ve Kısayollar bu şekilde sorgu aktarabilir. macOS Kısayollar ve Siri
+  için “Search Needle” adlı yerel bir uygulama kısayolu da kaydedilir.
+- **Yerel macOS entegrasyonu.** Klasörleri pencereye sürükleyerek indekse
+  ekleyebilir, `.efu` listesini bırakıp içe aktarabilir veya sonuçları Finder'a
+  sürükleyerek gerçek dosya işlemleri yapabilirsiniz. Ayarlar'dan açılışta
+  başlatma öğesi olarak da kaydedilebilir.
+- **İsteğe bağlı ETP uç noktası.** Minimal bir ETP/FTP kontrol düzlemi, varsayılan
+  olarak 8081 portunda `SITE EVERYTHING SEARCH/COUNT/OFFSET/QUERY` ve sütun
+  komutlarını kabul eder; Everything uyumlu istemciler Needle'ı sorgulayabilir.
+  Veri kanalı, TLS veya dosya indirme yoktur.
+- **Gizlilik.** İndeksleme ve arama tamamen sizin Mac'inizde yapılır. HTTP ve ETP
+  sunucuları yalnızca `127.0.0.1` adresine bağlanır ve elle açılması gerekir.
 
-Needle Everything'den esinlenmiştir, ancak onunla ikili uyumlu değildir. ETP ağ
-protokolü ve bazı gelişmiş Everything özellikleri henüz yok; ayrıntı için
-aşağıdaki [Kapsam](#kapsam) bölümüne bakın.
+Needle Everything'den esinlenmiştir, ancak tam ikili uyumlu değildir. ETP uç
+noktası yalnızca sorgu kontrol düzlemini uygular; bazı gelişmiş Everything
+özellikleri henüz yoktur; ayrıntı için aşağıdaki [Kapsam](#kapsam) bölümüne bakın.
 
 ## Gereksinimler
 
@@ -308,7 +329,7 @@ Proje deposu: <https://github.com/chnozmn-pixel/Needle>
 ### 1. Release ZIP — önerilen yol
 
 1. Deponun **Releases** sayfasını açın.
-2. `Needle-0.2.0.zip` dosyasını indirin.
+2. `Needle-0.3.0.zip` dosyasını indirin.
 3. ZIP'i açın ve `Needle.app` uygulamasını `/Applications` klasörüne taşıyın.
 4. Uygulamayı başlatın. İlk açılışta ev klasörünüz indekslenir.
 
@@ -367,7 +388,7 @@ Normal kurulum yolu değil, geliştirme içindir.
 
 ```bash
 ./scripts/package-release.sh
-# dist/Needle-0.2.0.zip yolunu ve SHA-256 değerini yazdırır
+# dist/Needle-0.3.0.zip yolunu ve SHA-256 değerini yazdırır
 ```
 
 Bu ZIP'i GitHub release'ine yükleyin ve SHA-256 değerini Cask dosyasına
@@ -432,9 +453,10 @@ yorumu arama/düzenleme, indeks günlüğü, küçük resim ızgarası, kök ba�
 ayarlar, sıralama, dışa aktarma, HTTP/JSON uç noktası, yerelleştirme ve yukarıda
 sayılan arayüz özellikleri. `content:` PDF metin çıkarımı ve görsel OCR kullanır.
 
-Henüz olmayanlar: ETP ikili protokolü, Everything özellik uyumluluğunun tamamı,
-gelişmiş indeks konumu ayarları ve özel sıralama ile yapılandırmanın kalan
-ayrıntıları. Katkılar memnuniyetle karşılanır.
+Henüz olmayanlar: ETP veri kanalı komutları (FTP tarzı gezinme ve dosya aktarımı),
+TLS, Everything özellik uyumluluğunun tamamı, gelişmiş indeks konumu ayarları ve
+özel sıralama ile yapılandırmanın kalan ayrıntıları. Katkılar memnuniyetle
+karşılanır.
 
 ## Testler
 

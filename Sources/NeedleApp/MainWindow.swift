@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import NeedleCore
 
 struct MainWindow: View {
@@ -21,6 +22,7 @@ struct MainWindow: View {
     @State private var propertiesResult: SearchResult?
     @State private var selectedRootPath: String?
     @State private var showJournal = false
+    @State private var isDropTargeted = false
     @FocusState private var searchFocused: Bool
 
     private var effectiveQuery: String {
@@ -42,14 +44,6 @@ struct MainWindow: View {
         }
     }
 
-    private var activeSort: (SortField, Bool) {
-        if let specification = parsed.sortSpecifications.first {
-            let field = Self.mapSortField(specification.field) ?? sortField
-            return (field, !specification.descending)
-        }
-        return (sortField, sortAscending)
-    }
-
     var body: some View {
         lifecycleContent
             .modifier(CommandReceiver(name: .needleOpenSelected, action: openSelected))
@@ -66,6 +60,13 @@ struct MainWindow: View {
             .modifier(CommandReceiver(name: .needleJournal, action: { showJournal = true }))
             .modifier(CommandReceiver(name: .needleFocusSearch, action: { searchFocused = true }))
             .modifier(CommandReceiver(name: .needleShowWindow, action: showWindow))
+            .onReceive(NotificationCenter.default.publisher(for: .needleApplyQuery)) { payload in
+                guard let text = payload.object as? String else { return }
+                query = text
+                preferences.rememberSearch(text)
+                searchFocused = true
+                scheduleSearch()
+            }
             .alert(
                 L("Hata"),
                 isPresented: Binding(
@@ -129,6 +130,19 @@ struct MainWindow: View {
             statusBar
         }
         .frame(minWidth: 720)
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .background(Color.accentColor.opacity(0.08))
+                    .allowsHitTesting(false)
+            }
+        }
+        // UTType.folder does not conform to UTType.fileURL, so both must be
+        // declared for folder drops to be accepted on macOS 13.
+        .onDrop(of: [.folder, .fileURL], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers)
+        }
     }
 
     private var resultsPane: some View {
@@ -527,8 +541,12 @@ struct MainWindow: View {
     // MARK: - Search
 
     private func recomputeDisplayed() {
-        let sort = activeSort
-        displayedResults = sortedResults(rootFilteredResults, by: sort.0, ascending: sort.1)
+        let specifications = parsed.sortSpecifications
+        if specifications.isEmpty {
+            displayedResults = sortedResults(rootFilteredResults, by: sortField, ascending: sortAscending)
+        } else {
+            displayedResults = SearchEngine.sortedResults(rootFilteredResults, by: specifications)
+        }
     }
 
     private func scheduleSearch() {
@@ -540,18 +558,6 @@ struct MainWindow: View {
             guard !Task.isCancelled else { return }
             results = found
             recomputeDisplayed()
-        }
-    }
-
-    private static func mapSortField(_ raw: String) -> SortField? {
-        switch raw.lowercased().replacingOccurrences(of: "-", with: "") {
-        case "name", "filename", "stem": return .name
-        case "path", "fullpath", "parent", "location": return .path
-        case "size": return .size
-        case "ext", "extension", "kind", "type": return .kind
-        case "dm", "datemodified", "modified", "date": return .modified
-        case "dc", "datecreated", "created": return .created
-        default: return nil
         }
     }
 
@@ -728,6 +734,79 @@ struct MainWindow: View {
         }
         NSApp.activate(ignoringOtherApps: true)
         searchFocused = true
+    }
+
+    // MARK: - Drag and drop
+
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        Task { @MainActor in
+            for provider in providers {
+                if let url = await loadDroppedURL(from: provider) {
+                    await handleDroppedURL(url)
+                }
+            }
+        }
+        return true
+    }
+
+    /// NSItemProvider can deliver an NSURL, a plain URL, or bookmark data
+    /// depending on the dragging app and declared type.
+    private func loadDroppedURL(from provider: NSItemProvider) async -> URL? {
+        if let url = await withCheckedContinuation({ continuation in
+            provider.loadObject(ofClass: NSURL.self) { object, _ in
+                continuation.resume(returning: object as? URL)
+            }
+        }) {
+            return url
+        }
+
+        for type in [UTType.fileURL.identifier, UTType.folder.identifier] {
+            let item = await withCheckedContinuation { continuation in
+                provider.loadItem(forTypeIdentifier: type, options: nil) { item, _ in
+                    continuation.resume(returning: item)
+                }
+            }
+            if let url = item as? URL { return url }
+            if let data = item as? Data {
+                var stale = false
+                if let url = try? URL(
+                    resolvingBookmarkData: data,
+                    options: [],
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &stale
+                ) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
+
+    private func handleDroppedURL(_ url: URL) async {
+        if url.pathExtension.lowercased() == "efu" {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+                coordinator.showError(L("Dosya listesi okunamadı."))
+                return
+            }
+            if let error = await coordinator.importEFU(
+                name: url.lastPathComponent,
+                text: text,
+                baseURL: url.deletingLastPathComponent()
+            ) {
+                coordinator.showError(error)
+            }
+            return
+        }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return }
+        if isDirectory.boolValue {
+            await coordinator.addRoot(path: url.path)
+            coordinator.infoMessage = L("%@ indekse eklendi.", url.lastPathComponent)
+        } else {
+            query = url.lastPathComponent
+            searchFocused = true
+        }
     }
 
     private func chooseFolders() {

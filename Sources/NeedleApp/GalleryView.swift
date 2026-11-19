@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import QuickLookThumbnailing
 import NeedleCore
 
@@ -215,6 +216,11 @@ private struct GalleryResultCell: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { openImmediately() }
         .onTapGesture { scheduleToggle() }
+        .onDrag {
+            let urls = FileManager.default.fileExists(atPath: result.entry.path)
+                ? [result.entry.url] as NSArray : [] as NSArray
+            return NSItemProvider(item: urls, typeIdentifier: UTType.fileURL.identifier)
+        }
         .contextMenu { contextMenuContent }
         .onAppear { loadThumbnail() }
         .onChange(of: result.id) { _ in prepareForReuse() }

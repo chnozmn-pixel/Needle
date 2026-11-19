@@ -95,6 +95,9 @@ public enum TranslationTables {
         "Çalışıyor": "Running",
         "Durdu": "Stopped",
         "http://localhost:%@/?s=rapor  ·  JSON için &format=json": "http://localhost:%@/?s=report  ·  add &format=json for JSON",
+        "ETP Sunucusu": "ETP Server",
+        "Yerel ETP (Everything ağ protokolü) sunucusunu etkinleştir": "Enable local ETP (Everything network protocol) server",
+        "Etkinleştirildiğinde 127.0.0.1:%@ adresinde düz metin ETP/FTP komutları dinlenir; veri kanalı ve dosya indirme yoktur.": "When enabled, plain-text ETP/FTP commands are accepted on 127.0.0.1:%@; there is no data channel or file download.",
         "İndeksleme": "Indexing",
         "Paket (.app, .bundle) içeriklerini atla": "Skip package (.app, .bundle) contents",
         "Dışlanan klasörler de dahil tüm değişiklikler yeniden taramada uygulanır.": "All changes, including excluded folders, apply on the next rescan.",
@@ -300,6 +303,12 @@ public enum TranslationTables {
         "Kök değişikliği": "Root change",
         "Değişiklik": "Change",
         "Dosya listesi boş.": "The file list is empty.",
+        "%@ indekse eklendi.": "Added %@ to the index.",
+        "Açılışta Needle'ı başlat": "Launch Needle at login",
+        "Giriş öğesi onayı gerekiyor: Sistem Ayarları → Genel → Açılış Öğeleri.": "Login item approval required: System Settings → General → Login Items.",
+        "Giriş öğesi ayarlanamadı: %@": "Could not configure the login item: %@",
+        "Kayıt için uygulamanın imzalı olması gerekir; macOS ayrıca onay isteyebilir.": "The app must be code signed for registration; macOS may also ask for approval.",
+        "Açılış Öğelerini Aç": "Open Login Items",
     ]
 
     /// Partial translations for widely used languages. Anything missing falls

@@ -283,6 +283,76 @@ public final class SearchEngine: @unchecked Sendable {
         return term.text.utf8.count >= 3
     }
 
+    // MARK: - Sorting
+
+    private enum SortKey: Comparable {
+        case text(String)
+        case number(Int64)
+        case date(Date)
+
+        static func < (lhs: SortKey, rhs: SortKey) -> Bool {
+            switch (lhs, rhs) {
+            case (.text(let left), .text(let right)): return left < right
+            case (.number(let left), .number(let right)): return left < right
+            case (.date(let left), .date(let right)): return left < right
+            default: return false
+            }
+        }
+    }
+
+    /// Applies every `sort:` specification. The first specification is the
+    /// primary key and later ones break ties; each pass is stable so earlier
+    /// passes survive when a later pass compares equal.
+    public static func sortedResults(
+        _ results: [SearchResult],
+        by specifications: [SortSpecification]
+    ) -> [SearchResult] {
+        guard !specifications.isEmpty else { return results }
+        var output = results
+        for specification in specifications.reversed() {
+            guard let key = sortKey(for: specification.field) else { continue }
+            output = stableSorted(output, by: key, ascending: !specification.descending)
+        }
+        return output
+    }
+
+    private static func stableSorted(
+        _ results: [SearchResult],
+        by key: (SearchResult) -> SortKey,
+        ascending: Bool
+    ) -> [SearchResult] {
+        let order = results.indices.sorted { lhs, rhs in
+            let left = key(results[lhs])
+            let right = key(results[rhs])
+            if left == right { return lhs < rhs }
+            return ascending ? left < right : right < left
+        }
+        return order.map { results[$0] }
+    }
+
+    private static func sortKey(for rawField: String) -> ((SearchResult) -> SortKey)? {
+        var field = rawField.lowercased()
+        for suffix in ["-descending", "-ascending"] where field.hasSuffix(suffix) {
+            field.removeLast(suffix.count)
+        }
+        switch field.replacingOccurrences(of: "-", with: "") {
+        case "name", "filename", "stem":
+            return { .text($0.entry.name.lowercased()) }
+        case "path", "fullpath", "parent", "location":
+            return { .text($0.entry.path.lowercased()) }
+        case "size":
+            return { .number($0.entry.isDirectory ? -1 : $0.entry.size) }
+        case "ext", "extension", "kind", "type":
+            return { .text($0.entry.isDirectory ? "folder" : ($0.entry.name as NSString).pathExtension.lowercased()) }
+        case "dm", "datemodified", "modified", "date":
+            return { .date($0.entry.modifiedAt ?? .distantPast) }
+        case "dc", "datecreated", "created":
+            return { .date($0.entry.createdAt ?? .distantPast) }
+        default:
+            return nil
+        }
+    }
+
     // MARK: - Search
 
     public func search(_ query: ParsedQuery, limit: Int = 10_000) -> [SearchResult] {
@@ -317,7 +387,7 @@ public final class SearchEngine: @unchecked Sendable {
         if !query.distinctFields.isEmpty {
             results = applyDistinct(results, fields: query.distinctFields)
         }
-        return results
+        return Self.sortedResults(results, by: query.sortSpecifications)
     }
 
     // MARK: - Expression evaluation

@@ -17,6 +17,7 @@ extension Notification.Name {
     static let needleExportEFU = Notification.Name("needle.exportEFU")
     static let needleImportEFU = Notification.Name("needle.importEFU")
     static let needleJournal = Notification.Name("needle.journal")
+    static let needleApplyQuery = Notification.Name("needle.applyQuery")
 }
 
 @main
@@ -25,6 +26,15 @@ struct NeedleApp: App {
     @StateObject private var preferences = Preferences()
     @ObservedObject private var localization = LocalizationManager.shared
 
+    // needle://search?q=report  or  needle://report
+    // Both forms are accepted so Shortcuts and browser bookmarks are easy.
+    private func handleOpenURL(_ url: URL) {
+        NotificationCenter.default.post(name: .needleShowWindow, object: nil)
+        if let query = DeepLink.query(from: url) {
+            NotificationCenter.default.post(name: .needleApplyQuery, object: query)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             MainWindow()
@@ -32,6 +42,9 @@ struct NeedleApp: App {
                 .environmentObject(preferences)
                 .preferredColorScheme(preferences.theme.colorScheme)
                 .frame(minWidth: 1_000, minHeight: 620)
+                .onOpenURL { url in
+                    handleOpenURL(url)
+                }
         }
         .windowStyle(.automatic)
         .commands {
