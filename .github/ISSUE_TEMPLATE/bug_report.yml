@@ -1,0 +1,73 @@
+name: Bug report / Hata bildirimi
+description: Report something that is broken or behaves unexpectedly / Bozuk veya beklenmedik davranan bir şeyi bildirin
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please search existing issues first.
+        Bildirim için teşekkürler. Lütfen önce mevcut issue'lara bakın.
+  - type: input
+    id: version
+    attributes:
+      label: Needle version / Needle sürümü
+      description: e.g. 0.5.3 (About window or release ZIP name) / örn. 0.5.3
+      placeholder: "0.5.3"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version / macOS sürümü
+      placeholder: "macOS 14.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Mac architecture / Mac mimarisi
+      options:
+        - Apple Silicon (arm64)
+        - Intel (x86_64)
+        - Not sure / Emin değilim
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Ne oldu?
+      description: Include the exact query or steps if the problem is about search. / Aramayla ilgiliyse tam sorguyu veya adımları yazın.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect? / Ne bekliyordunuz?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce / Yeniden üretme adımları
+      placeholder: |
+        1. Open Needle
+        2. Type ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or crash report / Günlük veya çökme raporu
+      description: Optional. Remove private paths before pasting. / İsteğe bağlı. Yapıştırmadan önce özel yolları kaldırın.
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks / Kontroller
+      options:
+        - label: I checked that this is not a Gatekeeper launch warning (right-click → Open once) / Bunun Gatekeeper açılış uyarısı olmadığını kontrol ettim (sağ tık → bir kez Aç)
+          required: false

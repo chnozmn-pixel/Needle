@@ -83,10 +83,14 @@ Everything features are not implemented — see [Scope](#scope) below.
 
 The repository is <https://github.com/chnozmn-pixel/Needle>.
 
+Release builds are **universal binaries**: they contain both `arm64` and
+`x86_64`, so Needle runs natively on Apple Silicon and Intel Macs without
+Rosetta. macOS 13 or newer is required on both.
+
 ### 1. Release ZIP — recommended
 
 1. Open the repository's **Releases** page.
-2. Download `Needle-0.5.2.zip`.
+2. Download `Needle-0.5.3.zip`.
 3. Unzip it and move `Needle.app` into `/Applications`.
 4. Launch it. On first run it indexes your home folder.
 
@@ -158,7 +162,7 @@ development, not as a normal installation path.
 
 ```bash
 ./scripts/package-release.sh
-# prints dist/Needle-0.5.2.zip and its SHA-256
+# prints dist/Needle-0.5.3.zip and its SHA-256
 ```
 
 Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
@@ -198,6 +202,15 @@ Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
 
 A space means AND, `|` means OR, and `!` means NOT. The full reference is in the
 app under **Settings → Syntax**.
+
+## Contributing and community
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test instructions and pull
+request guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community
+standards, [SECURITY.md](SECURITY.md) for private vulnerability reporting, and
+[ACCESSIBILITY.md](ACCESSIBILITY.md) for supported environments and known
+limitations. Bug reports and feature requests use the issue templates in
+`.github/ISSUE_TEMPLATE/`.
 
 ## Architecture
 
@@ -354,10 +367,14 @@ noktası yalnızca sorgu kontrol düzlemini uygular; bazı gelişmiş Everything
 
 Proje deposu: <https://github.com/chnozmn-pixel/Needle>
 
+Yayın derlemeleri **evrensel (universal) ikili** dosyalardır: hem `arm64` hem
+`x86_64` içerirler. Böylece Needle Apple Silicon ve Intel Mac'lerde Rosetta
+gerekmeden yerel olarak çalışır. İkisinde de macOS 13 veya üzeri gerekir.
+
 ### 1. Release ZIP — önerilen yol
 
 1. Deponun **Releases** sayfasını açın.
-2. `Needle-0.5.2.zip` dosyasını indirin.
+2. `Needle-0.5.3.zip` dosyasını indirin.
 3. ZIP'i açın ve `Needle.app` uygulamasını `/Applications` klasörüne taşıyın.
 4. Uygulamayı başlatın. İlk açılışta ev klasörünüz indekslenir.
 
@@ -431,7 +448,7 @@ Normal kurulum yolu değil, geliştirme içindir.
 
 ```bash
 ./scripts/package-release.sh
-# dist/Needle-0.5.2.zip yolunu ve SHA-256 değerini yazdırır
+# dist/Needle-0.5.3.zip yolunu ve SHA-256 değerini yazdırır
 ```
 
 Bu ZIP'i GitHub release'ine yükleyin ve SHA-256 değerini Cask dosyasına
@@ -472,6 +489,15 @@ kopyalayın.
 
 Boşluk VE, `|` VEYA, `!` ise DEĞİL anlamına gelir. Tam liste uygulama içinde
 **Ayarlar → Sözdizimi** sekmesindedir.
+
+## Katkı ve topluluk
+
+Derleme/test talimatları ve pull request kuralları için
+[CONTRIBUTING.md](CONTRIBUTING.md), topluluk standartları için
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), özel güvenlik bildirimi için
+[SECURITY.md](SECURITY.md), desteklenen ortamlar ve bilinen sınırlamalar için
+[ACCESSIBILITY.md](ACCESSIBILITY.md) dosyalarına bakın. Hata ve özellik
+bildirimleri `.github/ISSUE_TEMPLATE/` içindeki şablonlarla yapılır.
 
 ## Mimari
 

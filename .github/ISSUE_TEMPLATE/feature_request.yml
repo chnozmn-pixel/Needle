@@ -1,0 +1,49 @@
+name: Feature request / Özellik isteği
+description: Suggest an improvement or a new capability / Bir iyileştirme veya yeni yetenek önerin
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the problem before the solution; it helps us find the
+        right design. Lütfen çözümden önce problemi anlatın; doğru tasarımı
+        bulmamıza yardımcı olur.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve? / Hangi problemi çözer?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution / Önerilen çözüm
+      description: Include example queries or UI wording where relevant. / Gerekirse örnek sorgular veya arayüz metinleri ekleyin.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered / Değerlendirilen alternatifler
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / Alan
+      options:
+        - Search / query language / Arama / sorgu dili
+        - Indexing / roots / network folders / İndeksleme / kökler / ağ klasörleri
+        - User interface / localization / Arayüz / yerelleştirme
+        - Servers / integrations / Sunucular / entegrasyonlar
+        - Other / Diğer
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks / Kontroller
+      options:
+        - label: I searched existing issues and discussions / Mevcut issue ve tartışmalarda arama yaptım
+          required: true
