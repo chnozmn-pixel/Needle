@@ -3,12 +3,20 @@ import AppKit
 import UniformTypeIdentifiers
 import NeedleCore
 
+/// Reference holder for the current query text. SwiftUI `onChange` closures
+/// can be captured from an older render of the view struct; reading this box
+/// always yields the latest text regardless of which copy invokes the closure.
+private final class LiveQueryText {
+    var value: String = ""
+}
+
 struct MainWindow: View {
     @EnvironmentObject private var coordinator: IndexCoordinator
     @EnvironmentObject private var preferences: Preferences
     @ObservedObject private var localization = LocalizationManager.shared
 
     @State private var query = ""
+    @State private var queryBox = LiveQueryText()
     @State private var results: [SearchResult] = []
     @State private var displayedResults: [SearchResult] = []
     @State private var selection: Set<SearchResult.ID> = []
@@ -25,13 +33,17 @@ struct MainWindow: View {
     @State private var isDropTargeted = false
     @FocusState private var searchFocused: Bool
 
-    private var effectiveQuery: String {
-        [preferences.queryPrefix, query]
+    private func effectiveQuery(_ text: String) -> String {
+        [preferences.queryPrefix, text]
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
 
-    private var parsed: ParsedQuery { QueryParser.parse(effectiveQuery) }
+    private func parseQuery(_ text: String) -> ParsedQuery {
+        QueryParser.parse(effectiveQuery(text))
+    }
+
+    private var parsed: ParsedQuery { parseQuery(query) }
 
     private var selectedResults: [SearchResult] {
         displayedResults.filter { selection.contains($0.id) }
@@ -63,9 +75,10 @@ struct MainWindow: View {
             .onReceive(NotificationCenter.default.publisher(for: .needleApplyQuery)) { payload in
                 guard let text = payload.object as? String else { return }
                 query = text
+                queryBox.value = text
                 preferences.rememberSearch(text)
                 searchFocused = true
-                scheduleSearch()
+                scheduleSearch(for: text)
             }
             .alert(
                 L("Hata"),
@@ -86,12 +99,17 @@ struct MainWindow: View {
                 searchFocused = true
                 HotKeyManager.shared.register { showWindow() }
                 installKeyMonitor()
-                scheduleSearch()
+                queryBox.value = query
+                scheduleSearch(for: query)
             }
             .task { await coordinator.start() }
-            .onChange(of: query) { _ in scheduleSearch() }
-            .onChange(of: coordinator.status.revision) { _ in scheduleSearch() }
-            .onChange(of: coordinator.spotlightEnabled) { _ in scheduleSearch() }
+            .onChange(of: query) { newQuery in
+                queryBox.value = newQuery
+                scheduleSearch(for: newQuery)
+            }
+            .onChange(of: preferences.queryPrefix) { _ in scheduleSearch(for: queryBox.value) }
+            .onChange(of: coordinator.status.revision) { _ in scheduleSearch(for: queryBox.value) }
+            .onChange(of: coordinator.spotlightEnabled) { _ in scheduleSearch(for: queryBox.value) }
             .onChange(of: sortField) { _ in recomputeDisplayed() }
             .onChange(of: sortAscending) { _ in recomputeDisplayed() }
             .onChange(of: selectedRootPath) { _ in recomputeDisplayed() }
@@ -187,11 +205,24 @@ struct MainWindow: View {
                 .font(.title2)
                 .foregroundStyle(.secondary)
 
-            TextField(L("Dosya veya klasör adı…  (örn. ext:pdf path:projeler)"), text: $query)
+            // The binding setter receives the exact new text on every keystroke.
+            // Using `onChange` with a captured `self` can search the previous
+            // value instead, which makes live search appear to require Enter.
+            TextField(L("Dosya veya klasör adı…  (örn. ext:pdf path:projeler)"), text: Binding(
+                get: { query },
+                set: { newValue in
+                    query = newValue
+                    queryBox.value = newValue
+                    scheduleSearch(for: newValue)
+                }
+            ))
                 .textFieldStyle(.plain)
                 .font(.system(size: 18))
                 .focused($searchFocused)
-                .onSubmit { preferences.rememberSearch(query) }
+                .onSubmit {
+                    preferences.rememberSearch(query)
+                    scheduleSearch(for: query)
+                }
 
             if !query.isEmpty {
                 Button {
@@ -540,24 +571,65 @@ struct MainWindow: View {
 
     // MARK: - Search
 
-    private func recomputeDisplayed() {
-        let specifications = parsed.sortSpecifications
-        if specifications.isEmpty {
-            displayedResults = sortedResults(rootFilteredResults, by: sortField, ascending: sortAscending)
+    /// Pure arrangement step so scheduled searches never depend on a stale
+    /// SwiftUI struct capture.
+    private static func arrange(
+        _ found: [SearchResult],
+        rootPath: String?,
+        specifications: [SortSpecification],
+        sortField: SortField,
+        sortAscending: Bool
+    ) -> [SearchResult] {
+        let filtered: [SearchResult]
+        if let rootPath {
+            filtered = found.filter {
+                $0.entry.path == rootPath || $0.entry.path.hasPrefix(rootPath + "/")
+            }
         } else {
-            displayedResults = SearchEngine.sortedResults(rootFilteredResults, by: specifications)
+            filtered = found
         }
+        if specifications.isEmpty {
+            return sortedResults(filtered, by: sortField, ascending: sortAscending)
+        }
+        return SearchEngine.sortedResults(filtered, by: specifications)
     }
 
-    private func scheduleSearch() {
+    private func recomputeDisplayed() {
+        displayedResults = Self.arrange(
+            results,
+            rootPath: selectedRootPath,
+            specifications: parsed.sortSpecifications,
+            sortField: sortField,
+            sortAscending: sortAscending
+        )
+    }
+
+    /// Schedules a debounced live search for an explicit query string.
+    /// Passing the string in avoids reading an old `self` from an `onChange`
+    /// closure, which otherwise makes results appear only after pressing Enter.
+    private func scheduleSearch(for text: String? = nil) {
+        let queryText = text ?? query
+        let searchQuery = parseQuery(queryText)
+        let limit = preferences.resultLimit
+        let rootPath = selectedRootPath
+        let field = sortField
+        let ascending = sortAscending
+        let specifications = searchQuery.sortSpecifications
+
         searchTask?.cancel()
-        searchTask = Task {
+        searchTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 60_000_000)
             guard !Task.isCancelled else { return }
-            let found = await coordinator.search(parsed, limit: preferences.resultLimit)
+            let found = await coordinator.search(searchQuery, limit: limit)
             guard !Task.isCancelled else { return }
             results = found
-            recomputeDisplayed()
+            displayedResults = Self.arrange(
+                found,
+                rootPath: rootPath,
+                specifications: specifications,
+                sortField: field,
+                sortAscending: ascending
+            )
         }
     }
 

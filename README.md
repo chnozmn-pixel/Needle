@@ -86,7 +86,7 @@ The repository is <https://github.com/chnozmn-pixel/Needle>.
 ### 1. Release ZIP — recommended
 
 1. Open the repository's **Releases** page.
-2. Download `Needle-0.5.0.zip`.
+2. Download `Needle-0.5.1.zip`.
 3. Unzip it and move `Needle.app` into `/Applications`.
 4. Launch it. On first run it indexes your home folder.
 
@@ -158,7 +158,7 @@ development, not as a normal installation path.
 
 ```bash
 ./scripts/package-release.sh
-# prints dist/Needle-0.5.0.zip and its SHA-256
+# prints dist/Needle-0.5.1.zip and its SHA-256
 ```
 
 Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
@@ -357,7 +357,7 @@ Proje deposu: <https://github.com/chnozmn-pixel/Needle>
 ### 1. Release ZIP — önerilen yol
 
 1. Deponun **Releases** sayfasını açın.
-2. `Needle-0.5.0.zip` dosyasını indirin.
+2. `Needle-0.5.1.zip` dosyasını indirin.
 3. ZIP'i açın ve `Needle.app` uygulamasını `/Applications` klasörüne taşıyın.
 4. Uygulamayı başlatın. İlk açılışta ev klasörünüz indekslenir.
 
@@ -431,7 +431,7 @@ Normal kurulum yolu değil, geliştirme içindir.
 
 ```bash
 ./scripts/package-release.sh
-# dist/Needle-0.5.0.zip yolunu ve SHA-256 değerini yazdırır
+# dist/Needle-0.5.1.zip yolunu ve SHA-256 değerini yazdırır
 ```
 
 Bu ZIP'i GitHub release'ine yükleyin ve SHA-256 değerini Cask dosyasına
