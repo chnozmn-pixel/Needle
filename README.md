@@ -109,6 +109,19 @@ open dist/Needle.app
 bundle, copies the icon and `Info.plist`, and ad-hoc signs the result. The
 output is `dist/Needle.app`.
 
+For distribution outside Homebrew, set `SIGN_IDENTITY` to a Developer ID
+certificate and use `scripts/notarize.sh` with a `notarytool` keychain profile:
+
+```bash
+export SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"
+export NOTARY_PROFILE="needle-notary"
+xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+  --apple-id "you@example.com" --team-id TEAMID --password "app-specific-password"
+./scripts/notarize.sh
+```
+
+This produces a hardened-runtime, notarized, stapled ZIP with a fresh SHA-256.
+
 ### 3. Homebrew Cask
 
 A Cask definition lives at `Casks/needle.rb`, and its SHA-256 is refreshed from
@@ -234,6 +247,7 @@ Tests/NeedleTests/
 scripts/
   build-app.sh
   package-release.sh
+  notarize.sh
 Casks/needle.rb
 Resources/Needle.icns
 ```
@@ -361,6 +375,21 @@ open dist/Needle.app
 paketini oluşturur, simgeyi ve `Info.plist` dosyasını kopyalar ve sonucu ad-hoc
 imzalar. Çıktı: `dist/Needle.app`.
 
+Homebrew dışında dağıtım için `SIGN_IDENTITY` değişkenini bir Developer ID
+sertifikasına ayarlayıp `notarytool` anahtar zinciri profiliyle
+`scripts/notarize.sh` komutunu kullanın:
+
+```bash
+export SIGN_IDENTITY="Developer ID Application: Ad Soyad (TEAMID)"
+export NOTARY_PROFILE="needle-notary"
+xcrun notarytool store-credentials "$NOTARY_PROFILE" \
+  --apple-id "siz@example.com" --team-id TEAMID --password "uygulamaya-özel-parola"
+./scripts/notarize.sh
+```
+
+Bu komut hardened runtime ile imzalanmış, noterleşmiş ve ticket’ı eklenmiş ZIP
+üretir ve yeni SHA-256 değerini yazdırır.
+
 ### 3. Homebrew Cask
 
 `Casks/needle.rb` dosyası bir Cask tanımı içerir; SHA-256 değeri her sürümde
@@ -486,6 +515,7 @@ Tests/NeedleTests/
 scripts/
   build-app.sh
   package-release.sh
+  notarize.sh
 Casks/needle.rb
 Resources/Needle.icns
 ```
