@@ -310,6 +310,7 @@ public enum TranslationTables {
         "Giriş öğesi ayarlanamadı: %@": "Could not configure the login item: %@",
         "Kayıt için uygulamanın imzalı olması gerekir; macOS ayrıca onay isteyebilir.": "The app must be code signed for registration; macOS may also ask for approval.",
         "Açılış Öğelerini Aç": "Open Login Items",
+        "Anlamsal olarak ilgili adlar (İngilizce)": "Semantically related names (English)",
         "Güvenlik": "Security",
         "Ayarları kimlik doğrulama ile koru": "Protect settings with authentication",
         "Açıldığında Touch ID veya parola istenir.": "Touch ID or your password is required when opening.",

@@ -97,6 +97,27 @@ public enum QueryParser {
                     let keepsOperators = lower.hasPrefix("regex:") || lower.hasPrefix("regex*:")
                         || lower.hasPrefix("wildcards:")
                     if c.isWhitespace || (c == "|" && !keepsOperators) { break }
+                    // A quoted value after a function prefix
+                    // (`semantic:"annual report"`, `content:"two words"`) is
+                    // one token even though it contains spaces.
+                    if c == "\"" && value.hasSuffix(":") {
+                        i += 1
+                        var quoted = ""
+                        while i < chars.count {
+                            let q = chars[i]
+                            if q == "\"" { i += 1; break }
+                            if q == "\\", i + 1 < chars.count, isEscapable(chars[i + 1]) {
+                                i += 1
+                                quoted.append(chars[i])
+                                i += 1
+                                continue
+                            }
+                            quoted.append(q)
+                            i += 1
+                        }
+                        value.append(quoted)
+                        continue
+                    }
                     if c == "\\", i + 1 < chars.count, isEscapable(chars[i + 1]) {
                         i += 1
                         value.append(chars[i])
@@ -513,6 +534,18 @@ public enum QueryParser {
                 contentTerm.field = .content
                 return .text(contentTerm)
 
+            case "semantic":
+                let expanded = SemanticSearch.expand(value)
+                guard !expanded.isEmpty else { return .all }
+                let terms: [QueryExpression] = expanded.map { text in
+                    var expandedTerm = term
+                    expandedTerm.text = text
+                    expandedTerm.field = .name
+                    expandedTerm.mode = .contains
+                    return .text(expandedTerm)
+                }
+                return terms.count == 1 ? terms[0] : .or(terms)
+
             case "name", "stem", "kind", "type":
                 var fieldTerm = term
                 fieldTerm.field = field(for: key) ?? .name
@@ -623,7 +656,7 @@ public enum QueryParser {
             "empty", "child", "childfile", "childfolder", "descendant",
             "descendantfile", "descendantfolder", "parent", "fullpath",
             "location", "loc", "root", "volume", "volumelabel", "content",
-            "tag", "label", "comment",
+            "semantic", "tag", "label", "comment",
             "name", "stem", "kind", "type", "exists", "fileexists", "folderexists",
             "dupe", "dupemin", "dupemax", "distinct", "distinctsort",
             "count", "sort", "audio", "doc", "document", "exe", "executable",

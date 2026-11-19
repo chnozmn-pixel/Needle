@@ -31,10 +31,12 @@ Windows machine, or any cloud service. Results update as you type.
   from Needle's own index or that live on network volumes.
 - **Everything-style query language.** `|`, `!`, groups, quoted phrases,
   wildcards, `ext:`, `path:`, `parent:`, `root:`, `file`, `folder`, `size:`,
-  date filters, `content:`, `tag:`, `comment:`, `child:`, `empty:`, `dupe:`,
-  `distinct:`, `count:`, `sort:`, the macros `audio:`, `image:`, `video:` and
-  `zip:`, and character entities. `content:` also reads PDF text layers and
-  recognizes text in common image formats with OCR.
+  date filters, `content:`, `semantic:`, `tag:`, `comment:`, `child:`, `empty:`,
+  `dupe:`, `distinct:`, `count:`, `sort:`, the macros `audio:`, `image:`, `video:`
+  and `zip:`, and character entities. `content:` also reads PDF text layers and
+  recognizes text in common image formats with OCR. `semantic:` expands a query
+  with related English words using Apple's word embeddings, then searches the
+  normal index, so it stays fast on large libraries.
 - **EFU file lists.** Import voidtools-compatible `.efu` lists to index offline
   media, backups, or shares that are not currently mounted. Lists live in the
   index database and survive rescans. Results can be exported as EFU, CSV, or
@@ -84,7 +86,7 @@ The repository is <https://github.com/chnozmn-pixel/Needle>.
 ### 1. Release ZIP — recommended
 
 1. Open the repository's **Releases** page.
-2. Download `Needle-0.4.0.zip`.
+2. Download `Needle-0.5.0.zip`.
 3. Unzip it and move `Needle.app` into `/Applications`.
 4. Launch it. On first run it indexes your home folder.
 
@@ -156,7 +158,7 @@ development, not as a normal installation path.
 
 ```bash
 ./scripts/package-release.sh
-# prints dist/Needle-0.4.0.zip and its SHA-256
+# prints dist/Needle-0.5.0.zip and its SHA-256
 ```
 
 Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
@@ -187,6 +189,8 @@ Upload that ZIP to the GitHub release and copy the SHA-256 into the Cask.
 | `file size:>10mb` | Files larger than 10 MB |
 | `dm:today` | Modified today |
 | `content:needle` | Search file contents (PDF text and image OCR) |
+| `semantic:car` | Names matching the query or related English words |
+| `semantic:"annual report"` | Semantic search with a quoted phrase |
 | `tag:Important` | Finder tag |
 | `comment:draft` | Finder comment |
 | `dupe:size;content` | Duplicate files |
@@ -202,6 +206,7 @@ app under **Settings → Syntax**.
 | `FileSystem.scan` | Walks the selected roots with POSIX `opendir`/`readdir`/`lstat`, batches the metadata, and writes it to SQLite. |
 | `IndexDatabase` | Persistent SQLite database in WAL mode, with incremental inserts, updates and deletes, EFU lists, root settings and the journal. |
 | `SearchEngine` | In-memory snapshot with reversed 1-, 2-, and 3-byte n-gram posting lists; verifies real substring matches after intersecting candidates. |
+| `SemanticSearch` | Expands `semantic:` queries with related English words from `NLEmbedding` at parse time, leaving the search itself unchanged. |
 | `FSEventsWatcher` | Live change stream for local volumes; only the affected records are updated. |
 | `SpotlightSearch` | Optional `mdfind` lookups for missing entries and network volumes. |
 | `IndexStore` / `IndexCoordinator` | Scan lifecycle, the network schedule, and published state for SwiftUI. |
@@ -295,10 +300,12 @@ herhangi bir bulut servisine ihtiyaç duymaz. Sonuçlar siz yazarken güncelleni
   ağ birimlerinde duran dosyalar `mdfind` ile tamamlanabilir.
 - **Everything tarzı sorgu dili.** `|`, `!`, gruplar, tırnaklı ifadeler, joker
   karakterler, `ext:`, `path:`, `parent:`, `root:`, `file`, `folder`, `size:`,
-  tarih filtreleri, `content:`, `tag:`, `comment:`, `child:`, `empty:`, `dupe:`,
-  `distinct:`, `count:`, `sort:`, `audio:`, `image:`, `video:` ve `zip:`
-  makroları ve karakter kısaltmaları. `content:` PDF metin katmanlarını okur,
-  yaygın görsel biçimlerde OCR uygular.
+  tarih filtreleri, `content:`, `semantic:`, `tag:`, `comment:`, `child:`,
+  `empty:`, `dupe:`, `distinct:`, `count:`, `sort:`, `audio:`, `image:`, `video:`
+  ve `zip:` makroları ve karakter kısaltmaları. `content:` PDF metin katmanlarını
+  okur, yaygın görsel biçimlerde OCR uygular. `semantic:` sorguyu Apple kelime
+  gömümleriyle ilgili İngilizce sözcüklere genişletir; arama yine normal indekste
+  yapıldığı için büyük arşivlerde hızlı kalır.
 - **EFU dosya listeleri.** voidtools uyumlu `.efu` listelerini içe aktararak
   çevrimdışı medyayı, yedekleri veya bağlı olmayan paylaşımları indekse
   ekleyebilirsiniz. Listeler veritabanında saklanır ve yeniden taramada korunur.
@@ -350,7 +357,7 @@ Proje deposu: <https://github.com/chnozmn-pixel/Needle>
 ### 1. Release ZIP — önerilen yol
 
 1. Deponun **Releases** sayfasını açın.
-2. `Needle-0.4.0.zip` dosyasını indirin.
+2. `Needle-0.5.0.zip` dosyasını indirin.
 3. ZIP'i açın ve `Needle.app` uygulamasını `/Applications` klasörüne taşıyın.
 4. Uygulamayı başlatın. İlk açılışta ev klasörünüz indekslenir.
 
@@ -424,7 +431,7 @@ Normal kurulum yolu değil, geliştirme içindir.
 
 ```bash
 ./scripts/package-release.sh
-# dist/Needle-0.4.0.zip yolunu ve SHA-256 değerini yazdırır
+# dist/Needle-0.5.0.zip yolunu ve SHA-256 değerini yazdırır
 ```
 
 Bu ZIP'i GitHub release'ine yükleyin ve SHA-256 değerini Cask dosyasına
@@ -456,6 +463,8 @@ kopyalayın.
 | `file size:>10mb` | 10 MB'tan büyük dosyalar |
 | `dm:today` | Bugün değiştirilenler |
 | `content:needle` | Dosya içeriğinde arama (PDF metni ve görsel OCR) |
+| `semantic:car` | Sorguyla veya ilgili İngilizce sözcüklerle eşleşen adlar |
+| `semantic:"annual report"` | Tırnaklı ifadeyle anlamsal arama |
 | `tag:Önemli` | Finder etiketi |
 | `comment:taslak` | Finder yorumu |
 | `dupe:size;content` | Yinelenen dosyalar |
@@ -471,6 +480,7 @@ Boşluk VE, `|` VEYA, `!` ise DEĞİL anlamına gelir. Tam liste uygulama içind
 | `FileSystem.scan` | Seçilen kökleri POSIX `opendir`/`readdir`/`lstat` ile dolaşır, üst verileri toplu hâlde alır ve SQLite'a yazar. |
 | `IndexDatabase` | WAL modunda çalışan kalıcı SQLite veritabanı; artımlı ekleme, güncelleme ve silme, EFU listeleri, kök ayarları ve günlük. |
 | `SearchEngine` | Bellek içi anlık görüntü; ters çevrilmiş 1, 2 ve 3 baytlık n-gram listeleri ile aday kümesini daraltır, ardından gerçek eşleşmeyi doğrular. |
+| `SemanticSearch` | `semantic:` sorgularını ayrıştırma anında `NLEmbedding` ile ilgili İngilizce sözcüklere genişletir; arama motorunu değiştirmez. |
 | `FSEventsWatcher` | Yerel diskler için canlı değişiklik akışı; yalnızca etkilenen kayıtlar güncellenir. |
 | `SpotlightSearch` | Eksik kayıtlar ve ağ birimleri için isteğe bağlı `mdfind` sorguları. |
 | `IndexStore` / `IndexCoordinator` | Tarama yaşam döngüsü, ağ zamanlaması ve SwiftUI'ya aktarılan durum bilgisi. |

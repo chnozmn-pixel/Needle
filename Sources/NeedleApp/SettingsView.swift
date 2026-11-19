@@ -517,6 +517,7 @@ struct SettingsView: View {
                     SyntaxRow(query: L("case:RAPOR"), meaning: L("Büyük/küçük harfe duyarlı"))
                     SyntaxRow(query: L("wholewords:rapor"), meaning: L("Tam kelime"))
                     SyntaxRow(query: "content:needle", meaning: L("Dosya içeriğinde ara (PDF ve görsellerde OCR)"))
+                    SyntaxRow(query: "semantic:car", meaning: L("Anlamsal olarak ilgili adlar (İngilizce)"))
                     SyntaxRow(query: "tag:Önemli", meaning: L("Finder etiketi"))
                     SyntaxRow(query: "comment:taslak", meaning: L("Finder yorumu"))
                     SyntaxRow(query: "child:*.mp3", meaning: L("Eşleşen alt öğesi olan klasörler"))
