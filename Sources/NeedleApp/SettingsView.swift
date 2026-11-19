@@ -12,12 +12,14 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            rootsTab
-                .tabItem { Label(L("Kökler"), systemImage: "folder") }
             generalTab
                 .tabItem { Label(L("Genel"), systemImage: "gearshape") }
+            rootsTab
+                .tabItem { Label(L("Kökler"), systemImage: "folder") }
             searchTab
                 .tabItem { Label(L("Arama"), systemImage: "magnifyingglass") }
+            serversTab
+                .tabItem { Label(L("Sunucular"), systemImage: "network") }
             historyTab
                 .tabItem { Label(L("Geçmiş"), systemImage: "clock") }
             fileListsTab
@@ -25,7 +27,7 @@ struct SettingsView: View {
             syntaxTab
                 .tabItem { Label(L("Sözdizimi"), systemImage: "questionmark.circle") }
         }
-        .frame(width: 640, height: 520)
+        .frame(minWidth: 640, idealWidth: 720, minHeight: 520, idealHeight: 640)
     }
 
     // MARK: - Roots
@@ -209,7 +211,8 @@ struct SettingsView: View {
     // MARK: - General
 
     private var generalTab: some View {
-        Form {
+        ScrollView {
+            Form {
             Section(L("Dil")) {
                 Picker(L("Dil"), selection: Binding(
                     get: { localization.language },
@@ -281,63 +284,6 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section(L("HTTP Sunucusu")) {
-                Toggle(L("Yerel HTTP arama sunucusunu etkinleştir"), isOn: Binding(
-                    get: { coordinator.httpServerEnabled },
-                    set: { enabled in
-                        Task { await coordinator.setHTTPServer(enabled: enabled, port: UInt16(httpPortText)) }
-                    }
-                ))
-                HStack {
-                    TextField(L("Port"), text: $httpPortText)
-                        .frame(width: 80)
-                        .onSubmit { applyHTTPPort() }
-                    Button(L("Uygula")) { applyHTTPPort() }
-                    Spacer()
-                    if coordinator.httpServerRunning {
-                        Label(L("Çalışıyor"), systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    } else {
-                        Label(L("Durdu"), systemImage: "xmark.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Text(L("http://localhost:%@/?s=rapor  ·  JSON için &format=json", httpPortText))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            Section(L("ETP Sunucusu")) {
-                Toggle(L("Yerel ETP (Everything ağ protokolü) sunucusunu etkinleştir"), isOn: Binding(
-                    get: { coordinator.etpServerEnabled },
-                    set: { enabled in
-                        Task { await coordinator.setETPServer(enabled: enabled, port: UInt16(etpPortText)) }
-                    }
-                ))
-                HStack {
-                    TextField(L("Port"), text: $etpPortText)
-                        .frame(width: 80)
-                        .onSubmit { applyETPPort() }
-                    Button(L("Uygula")) { applyETPPort() }
-                    Spacer()
-                    if coordinator.etpServerRunning {
-                        Label(L("Çalışıyor"), systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    } else {
-                        Label(L("Durdu"), systemImage: "xmark.circle")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Text(L("Etkinleştirildiğinde 127.0.0.1:%@ adresinde düz metin ETP/FTP komutları dinlenir; veri kanalı ve dosya indirme yoktur.", etpPortText))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section(L("İndeksleme")) {
                 Toggle(L("Paket (.app, .bundle) içeriklerini atla"), isOn: Binding(
                     get: { coordinator.skipPackageContents },
@@ -368,8 +314,9 @@ struct SettingsView: View {
                 LabeledContent(L("Yolları kopyala"), value: "⌘ ⇧ C")
                 LabeledContent(L("Özellikler"), value: "⌘ I")
             }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .padding(20)
         .onAppear {
             httpPortText = String(coordinator.httpServerPort)
             etpPortText = String(coordinator.etpServerPort)
@@ -379,7 +326,8 @@ struct SettingsView: View {
     // MARK: - Search defaults
 
     private var searchTab: some View {
-        Form {
+        ScrollView {
+            Form {
             Section(L("Varsayılan eşleştirme")) {
                 Toggle(L("Büyük/küçük harfe duyarlı"), isOn: $preferences.matchCase)
                 Toggle(L("Tam kelime"), isOn: $preferences.wholeWords)
@@ -404,8 +352,79 @@ struct SettingsView: View {
                     ))
                 }
             }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .padding(20)
+    }
+
+    // MARK: - Servers
+
+    private var serversTab: some View {
+        ScrollView {
+            Form {
+                Section(L("HTTP Sunucusu")) {
+                    Toggle(L("Yerel HTTP arama sunucusunu etkinleştir"), isOn: Binding(
+                        get: { coordinator.httpServerEnabled },
+                        set: { enabled in
+                            Task { await coordinator.setHTTPServer(enabled: enabled, port: UInt16(httpPortText)) }
+                        }
+                    ))
+                    HStack {
+                        TextField(L("Port"), text: $httpPortText)
+                            .frame(width: 80)
+                            .onSubmit { applyHTTPPort() }
+                        Button(L("Uygula")) { applyHTTPPort() }
+                        Spacer()
+                        if coordinator.httpServerRunning {
+                            Label(L("Çalışıyor"), systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        } else {
+                            Label(L("Durdu"), systemImage: "xmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(L("http://localhost:%@/?s=rapor  ·  JSON için &format=json", httpPortText))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                Section(L("ETP Sunucusu")) {
+                    Toggle(L("Yerel ETP (Everything ağ protokolü) sunucusunu etkinleştir"), isOn: Binding(
+                        get: { coordinator.etpServerEnabled },
+                        set: { enabled in
+                            Task { await coordinator.setETPServer(enabled: enabled, port: UInt16(etpPortText)) }
+                        }
+                    ))
+                    HStack {
+                        TextField(L("Port"), text: $etpPortText)
+                            .frame(width: 80)
+                            .onSubmit { applyETPPort() }
+                        Button(L("Uygula")) { applyETPPort() }
+                        Spacer()
+                        if coordinator.etpServerRunning {
+                            Label(L("Çalışıyor"), systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        } else {
+                            Label(L("Durdu"), systemImage: "xmark.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(L("Etkinleştirildiğinde 127.0.0.1:%@ adresinde düz metin ETP/FTP komutları dinlenir; veri kanalı ve dosya indirme yoktur.", etpPortText))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .onAppear {
+            httpPortText = String(coordinator.httpServerPort)
+            etpPortText = String(coordinator.etpServerPort)
+        }
     }
 
     // MARK: - History

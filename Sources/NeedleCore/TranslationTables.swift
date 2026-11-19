@@ -95,6 +95,7 @@ public enum TranslationTables {
         "Çalışıyor": "Running",
         "Durdu": "Stopped",
         "http://localhost:%@/?s=rapor  ·  JSON için &format=json": "http://localhost:%@/?s=report  ·  add &format=json for JSON",
+        "Sunucular": "Servers",
         "ETP Sunucusu": "ETP Server",
         "Yerel ETP (Everything ağ protokolü) sunucusunu etkinleştir": "Enable local ETP (Everything network protocol) server",
         "Etkinleştirildiğinde 127.0.0.1:%@ adresinde düz metin ETP/FTP komutları dinlenir; veri kanalı ve dosya indirme yoktur.": "When enabled, plain-text ETP/FTP commands are accepted on 127.0.0.1:%@; there is no data channel or file download.",
