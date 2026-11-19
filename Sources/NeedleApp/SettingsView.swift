@@ -211,8 +211,7 @@ struct SettingsView: View {
     // MARK: - General
 
     private var generalTab: some View {
-        ScrollView {
-            Form {
+        List {
             Section(L("Dil")) {
                 Picker(L("Dil"), selection: Binding(
                     get: { localization.language },
@@ -314,9 +313,8 @@ struct SettingsView: View {
                 LabeledContent(L("Yolları kopyala"), value: "⌘ ⇧ C")
                 LabeledContent(L("Özellikler"), value: "⌘ I")
             }
-            }
-            .frame(maxWidth: .infinity)
         }
+        .listStyle(.inset)
         .onAppear {
             httpPortText = String(coordinator.httpServerPort)
             etpPortText = String(coordinator.etpServerPort)
@@ -326,8 +324,7 @@ struct SettingsView: View {
     // MARK: - Search defaults
 
     private var searchTab: some View {
-        ScrollView {
-            Form {
+        List {
             Section(L("Varsayılan eşleştirme")) {
                 Toggle(L("Büyük/küçük harfe duyarlı"), isOn: $preferences.matchCase)
                 Toggle(L("Tam kelime"), isOn: $preferences.wholeWords)
@@ -352,17 +349,15 @@ struct SettingsView: View {
                     ))
                 }
             }
-            }
-            .frame(maxWidth: .infinity)
         }
+        .listStyle(.inset)
     }
 
     // MARK: - Servers
 
     private var serversTab: some View {
-        ScrollView {
-            Form {
-                Section(L("HTTP Sunucusu")) {
+        List {
+            Section(L("HTTP Sunucusu")) {
                     Toggle(L("Yerel HTTP arama sunucusunu etkinleştir"), isOn: Binding(
                         get: { coordinator.httpServerEnabled },
                         set: { enabled in
@@ -418,9 +413,8 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            }
-            .frame(maxWidth: .infinity)
         }
+        .listStyle(.inset)
         .onAppear {
             httpPortText = String(coordinator.httpServerPort)
             etpPortText = String(coordinator.etpServerPort)
